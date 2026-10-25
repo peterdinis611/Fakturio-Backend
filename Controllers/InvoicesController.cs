@@ -1,6 +1,6 @@
 using Fakturio.Api.Dtos;
+using Fakturio.Api.Interfaces;
 using Fakturio.Api.Models;
-using Fakturio.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
@@ -8,7 +8,7 @@ namespace Fakturio.Api.Controllers;
 [ApiController]
 [Route("api/invoices")]
 [Produces("application/json")]
-public class InvoicesController(InvoiceService invoices) : ControllerBase
+public class InvoicesController(IInvoiceService invoices) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<InvoiceListItemResponse>), StatusCodes.Status200OK)]
@@ -18,9 +18,12 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
         [FromQuery] InvoiceStatus? status = null,
         [FromQuery] Guid? customerId = null,
         [FromQuery] string? search = null,
+        [FromQuery] DateOnly? issueFrom = null,
+        [FromQuery] DateOnly? issueTo = null,
         CancellationToken ct = default)
     {
-        return Ok(await invoices.ListAsync(page, pageSize, status, customerId, search, ct));
+        var query = new InvoiceListQuery(page, pageSize, status, customerId, search, issueFrom, issueTo);
+        return Ok(await invoices.ListAsync(query, ct));
     }
 
     [HttpGet("{id:guid}")]
@@ -28,7 +31,16 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<InvoiceResponse>> Get(Guid id, CancellationToken ct)
     {
-        var invoice = await invoices.GetAsync(id, ct);
+        var invoice = await invoices.GetByIdAsync(id, ct);
+        return invoice is null ? NotFound(new ApiError("Invoice not found.")) : Ok(invoice);
+    }
+
+    [HttpGet("by-number/{number}")]
+    [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<InvoiceResponse>> GetByNumber(string number, CancellationToken ct)
+    {
+        var invoice = await invoices.GetByNumberAsync(number, ct);
         return invoice is null ? NotFound(new ApiError("Invoice not found.")) : Ok(invoice);
     }
 
@@ -39,11 +51,11 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
         [FromBody] CreateInvoiceRequest request,
         CancellationToken ct)
     {
-        var (invoice, error, status) = await invoices.CreateAsync(request, ct);
-        if (error is not null)
-            return StatusCode(status, new ApiError(error));
+        var result = await invoices.CreateAsync(request, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
-        return CreatedAtAction(nameof(Get), new { id = invoice!.Id }, invoice);
+        return CreatedAtAction(nameof(Get), new { id = result.Data!.Id }, result.Data);
     }
 
     [HttpPut("{id:guid}")]
@@ -56,11 +68,11 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
         [FromBody] UpdateInvoiceRequest request,
         CancellationToken ct)
     {
-        var (invoice, error, status) = await invoices.UpdateAsync(id, request, ct);
-        if (error is not null)
-            return StatusCode(status, new ApiError(error));
+        var result = await invoices.UpdateAsync(id, request, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
-        return Ok(invoice);
+        return Ok(result.Data);
     }
 
     [HttpPatch("{id:guid}/status")]
@@ -73,11 +85,11 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
         [FromBody] UpdateInvoiceStatusRequest request,
         CancellationToken ct)
     {
-        var (result, error, status) = await invoices.UpdateStatusAsync(id, request, ct);
-        if (error is not null)
-            return StatusCode(status, new ApiError(error));
+        var result = await invoices.UpdateStatusAsync(id, request, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
-        return Ok(result);
+        return Ok(result.Data);
     }
 
     [HttpPost("{id:guid}/duplicate")]
@@ -85,11 +97,11 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<InvoiceResponse>> Duplicate(Guid id, CancellationToken ct)
     {
-        var (invoice, error, status) = await invoices.DuplicateAsync(id, ct);
-        if (error is not null)
-            return StatusCode(status, new ApiError(error));
+        var result = await invoices.DuplicateAsync(id, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
-        return CreatedAtAction(nameof(Get), new { id = invoice!.Id }, invoice);
+        return CreatedAtAction(nameof(Get), new { id = result.Data!.Id }, result.Data);
     }
 
     [HttpDelete("{id:guid}")]
@@ -98,9 +110,9 @@ public class InvoicesController(InvoiceService invoices) : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var (ok, error, status) = await invoices.DeleteAsync(id, ct);
-        if (!ok)
-            return StatusCode(status, new ApiError(error!));
+        var result = await invoices.DeleteAsync(id, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
         return NoContent();
     }

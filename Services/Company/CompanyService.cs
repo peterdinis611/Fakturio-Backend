@@ -1,14 +1,15 @@
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
+using Fakturio.Api.Interfaces;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace Fakturio.Api.Services;
+namespace Fakturio.Api.Services.Company;
 
-public class CompanyService(AppDbContext db)
+public class CompanyService(AppDbContext db) : ICompanyService
 {
-    public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct)
+    public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
         var company = await GetOrCreateAsync(ct);
         return CompanyMapper.ToResponse(company);
@@ -16,7 +17,7 @@ public class CompanyService(AppDbContext db)
 
     public async Task<CompanySettingsResponse> UpdateAsync(
         UpdateCompanySettingsRequest request,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.Apply(company, request);

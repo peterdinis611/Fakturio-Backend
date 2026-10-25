@@ -1,5 +1,5 @@
 using Fakturio.Api.Dtos;
-using Fakturio.Api.Services;
+using Fakturio.Api.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
@@ -7,7 +7,7 @@ namespace Fakturio.Api.Controllers;
 [ApiController]
 [Route("api/customers")]
 [Produces("application/json")]
-public class CustomersController(CustomerService customers) : ControllerBase
+public class CustomersController(ICustomerService customers) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<CustomerResponse>), StatusCodes.Status200OK)]
@@ -37,11 +37,11 @@ public class CustomersController(CustomerService customers) : ControllerBase
         [FromBody] CreateCustomerRequest request,
         CancellationToken ct)
     {
-        var (customer, error) = await customers.CreateAsync(request, ct);
-        if (error is not null)
-            return Conflict(new ApiError(error, "duplicate_ico"));
+        var result = await customers.CreateAsync(request, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
-        return CreatedAtAction(nameof(Get), new { id = customer!.Id }, customer);
+        return CreatedAtAction(nameof(Get), new { id = result.Data!.Id }, result.Data);
     }
 
     [HttpPut("{id:guid}")]
@@ -54,11 +54,11 @@ public class CustomersController(CustomerService customers) : ControllerBase
         [FromBody] UpdateCustomerRequest request,
         CancellationToken ct)
     {
-        var (customer, error, status) = await customers.UpdateAsync(id, request, ct);
-        if (error is not null)
-            return StatusCode(status, new ApiError(error));
+        var result = await customers.UpdateAsync(id, request, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
-        return Ok(customer);
+        return Ok(result.Data);
     }
 
     [HttpDelete("{id:guid}")]
@@ -67,9 +67,9 @@ public class CustomersController(CustomerService customers) : ControllerBase
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
-        var (ok, error, status) = await customers.DeleteAsync(id, ct);
-        if (!ok)
-            return StatusCode(status, new ApiError(error!));
+        var result = await customers.DeleteAsync(id, ct);
+        if (!result.Success)
+            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
 
         return NoContent();
     }

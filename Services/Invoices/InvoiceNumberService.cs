@@ -1,9 +1,10 @@
 using Fakturio.Api.Data;
+using Fakturio.Api.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
-namespace Fakturio.Api.Services;
+namespace Fakturio.Api.Services.Invoices;
 
-public class InvoiceNumberService(AppDbContext db)
+public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
 {
     /// <summary>
     /// Generates sequential invoice numbers: [prefix]YYYYNNNN (e.g. FA20260001).

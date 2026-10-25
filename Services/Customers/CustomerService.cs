@@ -1,18 +1,20 @@
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
+using Fakturio.Api.Interfaces;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
+using Fakturio.Api.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
-namespace Fakturio.Api.Services;
+namespace Fakturio.Api.Services.Customers;
 
-public class CustomerService(AppDbContext db)
+public class CustomerService(AppDbContext db) : ICustomerService
 {
     public async Task<PagedResponse<CustomerResponse>> ListAsync(
         int page,
         int pageSize,
         string? search,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -48,7 +50,7 @@ public class CustomerService(AppDbContext db)
             (int)Math.Ceiling(totalCount / (double)pageSize));
     }
 
-    public async Task<CustomerResponse?> GetAsync(Guid id, CancellationToken ct)
+    public async Task<CustomerResponse?> GetAsync(Guid id, CancellationToken ct = default)
     {
         var customer = await db.Customers
             .AsNoTracking()
@@ -61,15 +63,17 @@ public class CustomerService(AppDbContext db)
             : CustomerMapper.ToResponse(customer.Customer, customer.InvoiceCount);
     }
 
-    public async Task<(CustomerResponse? Customer, string? Error)> CreateAsync(
+    public async Task<ServiceResult<CustomerResponse>> CreateAsync(
         CreateCustomerRequest request,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         if (!string.IsNullOrWhiteSpace(request.Ico))
         {
             var exists = await db.Customers.AnyAsync(c => c.Ico == request.Ico.Trim(), ct);
             if (exists)
-                return (null, "A customer with this IČO already exists.");
+                return ServiceResult<CustomerResponse>.Conflict(
+                    "A customer with this IČO already exists.",
+                    "duplicate_ico");
         }
 
         var customer = new Customer();
@@ -77,45 +81,49 @@ public class CustomerService(AppDbContext db)
         db.Customers.Add(customer);
         await db.SaveChangesAsync(ct);
 
-        return (CustomerMapper.ToResponse(customer), null);
+        return ServiceResult<CustomerResponse>.Created(CustomerMapper.ToResponse(customer));
     }
 
-    public async Task<(CustomerResponse? Customer, string? Error, int StatusCode)> UpdateAsync(
+    public async Task<ServiceResult<CustomerResponse>> UpdateAsync(
         Guid id,
         UpdateCustomerRequest request,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var customer = await db.Customers.FindAsync([id], ct);
         if (customer is null)
-            return (null, "Customer not found.", StatusCodes.Status404NotFound);
+            return ServiceResult<CustomerResponse>.NotFound("Customer not found.");
 
         if (!string.IsNullOrWhiteSpace(request.Ico))
         {
             var ico = request.Ico.Trim();
             var exists = await db.Customers.AnyAsync(c => c.Id != id && c.Ico == ico, ct);
             if (exists)
-                return (null, "A customer with this IČO already exists.", StatusCodes.Status409Conflict);
+                return ServiceResult<CustomerResponse>.Conflict(
+                    "A customer with this IČO already exists.",
+                    "duplicate_ico");
         }
 
         CustomerMapper.Apply(customer, request);
         await db.SaveChangesAsync(ct);
 
         var invoiceCount = await db.Invoices.CountAsync(i => i.CustomerId == id, ct);
-        return (CustomerMapper.ToResponse(customer, invoiceCount), null, StatusCodes.Status200OK);
+        return ServiceResult<CustomerResponse>.Ok(CustomerMapper.ToResponse(customer, invoiceCount));
     }
 
-    public async Task<(bool Ok, string? Error, int StatusCode)> DeleteAsync(Guid id, CancellationToken ct)
+    public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var customer = await db.Customers.FindAsync([id], ct);
         if (customer is null)
-            return (false, "Customer not found.", StatusCodes.Status404NotFound);
+            return ServiceResult.NotFound("Customer not found.");
 
         var hasInvoices = await db.Invoices.AnyAsync(i => i.CustomerId == id, ct);
         if (hasInvoices)
-            return (false, "Customer has invoices and cannot be deleted.", StatusCodes.Status409Conflict);
+            return ServiceResult.Conflict(
+                "Customer has invoices and cannot be deleted.",
+                "has_invoices");
 
         db.Customers.Remove(customer);
         await db.SaveChangesAsync(ct);
-        return (true, null, StatusCodes.Status204NoContent);
+        return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 }

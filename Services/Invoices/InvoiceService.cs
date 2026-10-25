@@ -1,59 +1,62 @@
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
+using Fakturio.Api.Interfaces;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
+using Fakturio.Api.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
-namespace Fakturio.Api.Services;
+namespace Fakturio.Api.Services.Invoices;
 
-public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
+public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : IInvoiceService
 {
     public async Task<PagedResponse<InvoiceListItemResponse>> ListAsync(
-        int page,
-        int pageSize,
-        InvoiceStatus? status,
-        Guid? customerId,
-        string? search,
-        CancellationToken ct)
+        InvoiceListQuery query,
+        CancellationToken ct = default)
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
 
-        var query = db.Invoices.AsNoTracking().AsQueryable();
+        var invoices = db.Invoices.AsNoTracking().AsQueryable();
 
-        if (status.HasValue)
-            query = query.Where(i => i.Status == status.Value);
+        if (query.Status.HasValue)
+            invoices = invoices.Where(i => i.Status == query.Status.Value);
 
-        if (customerId.HasValue)
-            query = query.Where(i => i.CustomerId == customerId.Value);
+        if (query.CustomerId.HasValue)
+            invoices = invoices.Where(i => i.CustomerId == query.CustomerId.Value);
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (query.IssueFrom.HasValue)
+            invoices = invoices.Where(i => i.IssueDate >= query.IssueFrom.Value);
+
+        if (query.IssueTo.HasValue)
+            invoices = invoices.Where(i => i.IssueDate <= query.IssueTo.Value);
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var term = search.Trim();
-            query = query.Where(i =>
+            var term = query.Search.Trim();
+            invoices = invoices.Where(i =>
                 i.Number.Contains(term) ||
                 i.CustomerName.Contains(term) ||
                 (i.VariableSymbol != null && i.VariableSymbol.Contains(term)));
         }
 
-        var totalCount = await query.CountAsync(ct);
-        var items = await query
+        var totalCount = await invoices.CountAsync(ct);
+        var items = await invoices
             .OrderByDescending(i => i.IssueDate)
             .ThenByDescending(i => i.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
-        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
         return new PagedResponse<InvoiceListItemResponse>(
             items.Select(InvoiceMapper.ToListItem).ToList(),
             page,
             pageSize,
             totalCount,
-            totalPages);
+            (int)Math.Ceiling(totalCount / (double)pageSize));
     }
 
-    public async Task<InvoiceResponse?> GetAsync(Guid id, CancellationToken ct)
+    public async Task<InvoiceResponse?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
         var invoice = await db.Invoices
             .AsNoTracking()
@@ -63,13 +66,26 @@ public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
         return invoice is null ? null : InvoiceMapper.ToResponse(invoice);
     }
 
-    public async Task<(InvoiceResponse? Invoice, string? Error, int StatusCode)> CreateAsync(
+    public async Task<InvoiceResponse?> GetByNumberAsync(string number, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(number))
+            return null;
+
+        var invoice = await db.Invoices
+            .AsNoTracking()
+            .Include(i => i.Items)
+            .FirstOrDefaultAsync(i => i.Number == number.Trim(), ct);
+
+        return invoice is null ? null : InvoiceMapper.ToResponse(invoice);
+    }
+
+    public async Task<ServiceResult<InvoiceResponse>> CreateAsync(
         CreateInvoiceRequest request,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
-            return (null, "Customer not found.", StatusCodes.Status400BadRequest);
+            return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", "customer_not_found");
 
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -109,27 +125,29 @@ public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync(ct);
 
-        return (InvoiceMapper.ToResponse(invoice), null, StatusCodes.Status201Created);
+        return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(invoice));
     }
 
-    public async Task<(InvoiceResponse? Invoice, string? Error, int StatusCode)> UpdateAsync(
+    public async Task<ServiceResult<InvoiceResponse>> UpdateAsync(
         Guid id,
         UpdateInvoiceRequest request,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var invoice = await db.Invoices
             .Include(i => i.Items)
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
         if (invoice is null)
-            return (null, "Invoice not found.", StatusCodes.Status404NotFound);
+            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.");
 
         if (invoice.Status is not InvoiceStatus.Draft)
-            return (null, "Only draft invoices can be fully updated.", StatusCodes.Status409Conflict);
+            return ServiceResult<InvoiceResponse>.Conflict(
+                "Only draft invoices can be fully updated.",
+                "not_draft");
 
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
-            return (null, "Customer not found.", StatusCodes.Status400BadRequest);
+            return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", "customer_not_found");
 
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
 
@@ -152,23 +170,27 @@ public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
         InvoiceCalculator.RecalculateTotals(invoice);
 
         await db.SaveChangesAsync(ct);
-        return (InvoiceMapper.ToResponse(invoice), null, StatusCodes.Status200OK);
+        return ServiceResult<InvoiceResponse>.Ok(InvoiceMapper.ToResponse(invoice));
     }
 
-    public async Task<(InvoiceStatusResponse? Result, string? Error, int StatusCode)> UpdateStatusAsync(
+    public async Task<ServiceResult<InvoiceStatusResponse>> UpdateStatusAsync(
         Guid id,
         UpdateInvoiceStatusRequest request,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var invoice = await db.Invoices.FindAsync([id], ct);
         if (invoice is null)
-            return (null, "Invoice not found.", StatusCodes.Status404NotFound);
+            return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.");
 
         if (invoice.Status == InvoiceStatus.Cancelled && request.Status != InvoiceStatus.Cancelled)
-            return (null, "Cancelled invoices cannot change status.", StatusCodes.Status409Conflict);
+            return ServiceResult<InvoiceStatusResponse>.Conflict(
+                "Cancelled invoices cannot change status.",
+                "cancelled");
 
         if (invoice.Status == InvoiceStatus.Paid && request.Status is InvoiceStatus.Draft)
-            return (null, "Paid invoices cannot return to draft.", StatusCodes.Status409Conflict);
+            return ServiceResult<InvoiceStatusResponse>.Conflict(
+                "Paid invoices cannot return to draft.",
+                "paid_to_draft");
 
         invoice.Status = request.Status;
         invoice.UpdatedAt = DateTime.UtcNow;
@@ -180,13 +202,13 @@ public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
 
         await db.SaveChangesAsync(ct);
 
-        return (new InvoiceStatusResponse(invoice.Id, invoice.Number, invoice.Status, invoice.PaidAt),
-            null, StatusCodes.Status200OK);
+        return ServiceResult<InvoiceStatusResponse>.Ok(
+            new InvoiceStatusResponse(invoice.Id, invoice.Number, invoice.Status, invoice.PaidAt));
     }
 
-    public async Task<(InvoiceResponse? Invoice, string? Error, int StatusCode)> DuplicateAsync(
+    public async Task<ServiceResult<InvoiceResponse>> DuplicateAsync(
         Guid id,
-        CancellationToken ct)
+        CancellationToken ct = default)
     {
         var source = await db.Invoices
             .AsNoTracking()
@@ -194,7 +216,7 @@ public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
         if (source is null)
-            return (null, "Invoice not found.", StatusCodes.Status404NotFound);
+            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.");
 
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
         var issueDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -253,22 +275,23 @@ public class InvoiceService(AppDbContext db, InvoiceNumberService numbers)
         db.Invoices.Add(clone);
         await db.SaveChangesAsync(ct);
 
-        return (InvoiceMapper.ToResponse(clone), null, StatusCodes.Status201Created);
+        return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(clone));
     }
 
-    public async Task<(bool Ok, string? Error, int StatusCode)> DeleteAsync(Guid id, CancellationToken ct)
+    public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
         var invoice = await db.Invoices.FindAsync([id], ct);
         if (invoice is null)
-            return (false, "Invoice not found.", StatusCodes.Status404NotFound);
+            return ServiceResult.NotFound("Invoice not found.");
 
         if (invoice.Status is not InvoiceStatus.Draft)
-            return (false, "Only draft invoices can be deleted. Cancel issued invoices instead.",
-                StatusCodes.Status409Conflict);
+            return ServiceResult.Conflict(
+                "Only draft invoices can be deleted. Cancel issued invoices instead.",
+                "not_draft");
 
         db.Invoices.Remove(invoice);
         await db.SaveChangesAsync(ct);
-        return (true, null, StatusCodes.Status204NoContent);
+        return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 
     private static string DigitsOnly(string value) =>

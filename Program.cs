@@ -19,6 +19,7 @@ builder.Services.AddControllers(options =>
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerRequestValidator>();
+builder.Services.AddApplicationServices();
 
 builder.Services.AddCors(options =>
 {
@@ -31,11 +32,6 @@ var connectionString = builder.Configuration.GetConnectionString("Default")
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
-
-builder.Services.AddScoped<InvoiceNumberService>();
-builder.Services.AddScoped<InvoiceService>();
-builder.Services.AddScoped<CustomerService>();
-builder.Services.AddScoped<CompanyService>();
 
 var app = builder.Build();
 

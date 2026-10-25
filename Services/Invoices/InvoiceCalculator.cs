@@ -1,6 +1,6 @@
 using Fakturio.Api.Models;
 
-namespace Fakturio.Api.Services;
+namespace Fakturio.Api.Services.Invoices;
 
 public static class InvoiceCalculator
 {

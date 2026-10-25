@@ -1,5 +1,5 @@
 using Fakturio.Api.Dtos;
-using Fakturio.Api.Services;
+using Fakturio.Api.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
@@ -7,7 +7,7 @@ namespace Fakturio.Api.Controllers;
 [ApiController]
 [Route("api/company")]
 [Produces("application/json")]
-public class CompanyController(CompanyService company) : ControllerBase
+public class CompanyController(ICompanyService company) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
