@@ -45,6 +45,10 @@ public record UpdateInvoiceRequest(
 
 public record UpdateInvoiceStatusRequest(InvoiceStatus Status);
 
+public record MarkInvoicePaidRequest(DateOnly? PaidAt);
+
+public record CancelInvoiceRequest(string Reason);
+
 public record InvoiceItemResponse(
     Guid Id,
     string Description,
@@ -66,8 +70,11 @@ public record InvoiceListItemResponse(
     string CustomerName,
     DateOnly IssueDate,
     DateOnly DueDate,
+    DateOnly? PaidAt,
     string Currency,
     decimal Total,
+    bool IsOverdue,
+    int? DaysUntilDue,
     DateTime CreatedAt
 );
 
@@ -94,6 +101,10 @@ public record InvoiceResponse(
     DateOnly DueDate,
     DateOnly? DeliveryDate,
     DateOnly? PaidAt,
+    string? CancelReason,
+    DateOnly? CancelledAt,
+    DateTime? LastReminderSentAt,
+    int ReminderCount,
     string Currency,
     string? VariableSymbol,
     string? ConstantSymbol,
@@ -105,6 +116,8 @@ public record InvoiceResponse(
     decimal Subtotal,
     decimal VatTotal,
     decimal Total,
+    bool IsOverdue,
+    int? DaysUntilDue,
     DateTime CreatedAt,
     DateTime UpdatedAt,
     IReadOnlyList<InvoiceItemResponse> Items
@@ -114,5 +127,42 @@ public record InvoiceStatusResponse(
     Guid Id,
     string Number,
     InvoiceStatus Status,
-    DateOnly? PaidAt
+    DateOnly? PaidAt,
+    string? CancelReason,
+    DateOnly? CancelledAt
 );
+
+public record InvoiceStatsResponse(
+    DateOnly? From,
+    DateOnly? To,
+    int TotalCount,
+    int DraftCount,
+    int IssuedCount,
+    int PaidCount,
+    int OverdueCount,
+    int CancelledCount,
+    decimal TotalAmount,
+    decimal PaidAmount,
+    decimal OutstandingAmount,
+    decimal OverdueAmount,
+    string Currency
+);
+
+public record InvoiceReminderItemResponse(
+    Guid Id,
+    string Number,
+    InvoiceStatus Status,
+    Guid CustomerId,
+    string CustomerName,
+    string? CustomerEmail,
+    DateOnly IssueDate,
+    DateOnly DueDate,
+    string Currency,
+    decimal Total,
+    bool IsOverdue,
+    int DaysUntilDue,
+    int ReminderCount,
+    DateTime? LastReminderSentAt
+);
+
+public record SyncOverdueResponse(int UpdatedCount);

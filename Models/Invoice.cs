@@ -35,6 +35,12 @@ public class Invoice
     public DateOnly? DeliveryDate { get; set; }
     public DateOnly? PaidAt { get; set; }
 
+    public string? CancelReason { get; set; }
+    public DateOnly? CancelledAt { get; set; }
+
+    public DateTime? LastReminderSentAt { get; set; }
+    public int ReminderCount { get; set; }
+
     public string Currency { get; set; } = "EUR";
     public string? VariableSymbol { get; set; }
     public string? ConstantSymbol { get; set; }

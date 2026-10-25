@@ -5,7 +5,7 @@ namespace Fakturio.Api.Mapping;
 
 public static class InvoiceMapper
 {
-    public static InvoiceListItemResponse ToListItem(Invoice i) => new(
+    public static InvoiceListItemResponse ToListItem(Invoice i, DateOnly today) => new(
         i.Id,
         i.Number,
         i.Status,
@@ -13,73 +13,125 @@ public static class InvoiceMapper
         i.CustomerName,
         i.IssueDate,
         i.DueDate,
+        i.PaidAt,
         i.Currency,
         i.Total,
+        IsOverdue(i, today),
+        DaysUntilDue(i, today),
         i.CreatedAt
     );
 
-    public static InvoiceResponse ToResponse(Invoice i) => new(
+    public static InvoiceResponse ToResponse(Invoice i, DateOnly? today = null)
+    {
+        today ??= DateOnly.FromDateTime(DateTime.UtcNow);
+        return new(
+            i.Id,
+            i.Number,
+            i.Status,
+            i.CustomerId,
+            new InvoicePartyResponse(
+                i.CustomerName,
+                i.CustomerIco,
+                i.CustomerDic,
+                i.CustomerIcDph,
+                i.CustomerEmail,
+                i.CustomerStreet,
+                i.CustomerCity,
+                i.CustomerPostalCode,
+                i.CustomerCountry
+            ),
+            string.IsNullOrWhiteSpace(i.SellerName)
+                ? null
+                : new InvoicePartyResponse(
+                    i.SellerName,
+                    i.SellerIco,
+                    i.SellerDic,
+                    i.SellerIcDph,
+                    null,
+                    i.SellerStreet,
+                    i.SellerCity,
+                    i.SellerPostalCode,
+                    i.SellerCountry
+                ),
+            i.IssueDate,
+            i.DueDate,
+            i.DeliveryDate,
+            i.PaidAt,
+            i.CancelReason,
+            i.CancelledAt,
+            i.LastReminderSentAt,
+            i.ReminderCount,
+            i.Currency,
+            i.VariableSymbol,
+            i.ConstantSymbol,
+            i.SpecificSymbol,
+            i.PaymentMethod,
+            i.BankIban,
+            i.BankBic,
+            i.Notes,
+            i.Subtotal,
+            i.VatTotal,
+            i.Total,
+            IsOverdue(i, today.Value),
+            DaysUntilDue(i, today.Value),
+            i.CreatedAt,
+            i.UpdatedAt,
+            i.Items
+                .OrderBy(item => item.SortOrder)
+                .Select(item => new InvoiceItemResponse(
+                    item.Id,
+                    item.Description,
+                    item.Unit,
+                    item.Quantity,
+                    item.UnitPrice,
+                    item.VatRate,
+                    item.Subtotal,
+                    item.VatAmount,
+                    item.Total,
+                    item.SortOrder
+                ))
+                .ToList()
+        );
+    }
+
+    public static InvoiceReminderItemResponse ToReminderItem(Invoice i, DateOnly today) => new(
         i.Id,
         i.Number,
         i.Status,
         i.CustomerId,
-        new InvoicePartyResponse(
-            i.CustomerName,
-            i.CustomerIco,
-            i.CustomerDic,
-            i.CustomerIcDph,
-            i.CustomerEmail,
-            i.CustomerStreet,
-            i.CustomerCity,
-            i.CustomerPostalCode,
-            i.CustomerCountry
-        ),
-        string.IsNullOrWhiteSpace(i.SellerName)
-            ? null
-            : new InvoicePartyResponse(
-                i.SellerName,
-                i.SellerIco,
-                i.SellerDic,
-                i.SellerIcDph,
-                null,
-                i.SellerStreet,
-                i.SellerCity,
-                i.SellerPostalCode,
-                i.SellerCountry
-            ),
+        i.CustomerName,
+        i.CustomerEmail,
         i.IssueDate,
         i.DueDate,
-        i.DeliveryDate,
-        i.PaidAt,
         i.Currency,
-        i.VariableSymbol,
-        i.ConstantSymbol,
-        i.SpecificSymbol,
-        i.PaymentMethod,
-        i.BankIban,
-        i.BankBic,
-        i.Notes,
-        i.Subtotal,
-        i.VatTotal,
         i.Total,
-        i.CreatedAt,
-        i.UpdatedAt,
-        i.Items
-            .OrderBy(item => item.SortOrder)
-            .Select(item => new InvoiceItemResponse(
-                item.Id,
-                item.Description,
-                item.Unit,
-                item.Quantity,
-                item.UnitPrice,
-                item.VatRate,
-                item.Subtotal,
-                item.VatAmount,
-                item.Total,
-                item.SortOrder
-            ))
-            .ToList()
+        IsOverdue(i, today),
+        today.DayNumber - i.DueDate.DayNumber,
+        i.ReminderCount,
+        i.LastReminderSentAt
     );
+
+    public static InvoiceStatusResponse ToStatusResponse(Invoice i) => new(
+        i.Id,
+        i.Number,
+        i.Status,
+        i.PaidAt,
+        i.CancelReason,
+        i.CancelledAt
+    );
+
+    public static bool IsOverdue(Invoice i, DateOnly today) =>
+        i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue
+        && i.DueDate < today
+        && i.PaidAt is null;
+
+    public static int? DaysUntilDue(Invoice i, DateOnly today)
+    {
+        if (i.Status is InvoiceStatus.Paid or InvoiceStatus.Cancelled or InvoiceStatus.Draft)
+            return null;
+
+        return i.DueDate.DayNumber - today.DayNumber;
+    }
 
     public static void ApplyCustomerSnapshot(Invoice invoice, Customer customer)
     {
