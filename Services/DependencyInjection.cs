@@ -5,6 +5,7 @@ using Fakturio.Api.Services.Company;
 using Fakturio.Api.Services.Customers;
 using Fakturio.Api.Services.Exports;
 using Fakturio.Api.Services.Invoices;
+using Fakturio.Api.Services.Reminders;
 using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Search;
 
@@ -18,6 +19,10 @@ public static class DependencyInjection
     {
         services.Configure<OverdueSyncOptions>(configuration.GetSection(OverdueSyncOptions.SectionName));
         services.AddHostedService<OverdueSyncBackgroundService>();
+
+        services.Configure<ReminderJobOptions>(configuration.GetSection(ReminderJobOptions.SectionName));
+        services.AddScoped<IReminderNotifier, LoggingReminderNotifier>();
+        services.AddHostedService<ReminderBackgroundService>();
 
         services.AddScoped<IInvoiceNumberService, InvoiceNumberService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
