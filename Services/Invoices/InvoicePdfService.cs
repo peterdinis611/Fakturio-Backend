@@ -3,6 +3,7 @@ using Fakturio.Api.Data;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Models;
 using Fakturio.Api.Services.Common;
+using Fakturio.Api.Services.Payments;
 using Microsoft.EntityFrameworkCore;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
@@ -24,6 +25,18 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         if (invoice is null)
             return ServiceResult<InvoicePdfFile>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
+        var epcPayload = invoice.Status is InvoiceStatus.Cancelled or InvoiceStatus.Draft
+            ? null
+            : EpcQrPayload.TryBuild(
+                invoice.BankIban,
+                invoice.SellerName,
+                invoice.Total,
+                invoice.Currency,
+                invoice.BankBic,
+                remittance: invoice.VariableSymbol);
+
+        var qrPng = EpcQrImage.TryCreatePng(epcPayload);
+
         var bytes = Document.Create(container =>
         {
             container.Page(page =>
@@ -33,7 +46,7 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                 page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Grey.Darken3));
 
                 page.Header().Element(c => ComposeHeader(c, invoice));
-                page.Content().Element(c => ComposeContent(c, invoice));
+                page.Content().Element(c => ComposeContent(c, invoice, qrPng));
                 page.Footer().AlignCenter().Text(text =>
                 {
                     text.Span("Fakturio · strana ");
@@ -81,7 +94,7 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         });
     }
 
-    private static void ComposeContent(IContainer container, Invoice invoice)
+    private static void ComposeContent(IContainer container, Invoice invoice, byte[]? qrPng)
     {
         container.Column(col =>
         {
@@ -140,23 +153,37 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                 }
             });
 
-            col.Item().AlignRight().Width(220).Column(totals =>
+            col.Item().Row(row =>
             {
-                totals.Item().Row(r =>
+                row.RelativeItem().Column(payment =>
                 {
-                    r.RelativeItem().Text("Základ:");
-                    r.ConstantItem(100).AlignRight().Text(Money(invoice.Subtotal, invoice.Currency));
+                    if (qrPng is { Length: > 0 })
+                    {
+                        payment.Item().Text("Platba QR (EPC)").SemiBold().FontSize(9);
+                        payment.Item().Width(110).Height(110).Image(qrPng);
+                        payment.Item().PaddingTop(2).Text("Naskenuj v bankovej appke")
+                            .FontSize(8).FontColor(Colors.Grey.Darken1);
+                    }
                 });
-                totals.Item().Row(r =>
+
+                row.ConstantItem(220).Column(totals =>
                 {
-                    r.RelativeItem().Text("DPH:");
-                    r.ConstantItem(100).AlignRight().Text(Money(invoice.VatTotal, invoice.Currency));
-                });
-                totals.Item().PaddingTop(4).Row(r =>
-                {
-                    r.RelativeItem().Text("Celkom:").SemiBold().FontSize(12);
-                    r.ConstantItem(100).AlignRight().Text(Money(invoice.Total, invoice.Currency))
-                        .SemiBold().FontSize(12);
+                    totals.Item().Row(r =>
+                    {
+                        r.RelativeItem().Text("Základ:");
+                        r.ConstantItem(100).AlignRight().Text(Money(invoice.Subtotal, invoice.Currency));
+                    });
+                    totals.Item().Row(r =>
+                    {
+                        r.RelativeItem().Text("DPH:");
+                        r.ConstantItem(100).AlignRight().Text(Money(invoice.VatTotal, invoice.Currency));
+                    });
+                    totals.Item().PaddingTop(4).Row(r =>
+                    {
+                        r.RelativeItem().Text("Celkom:").SemiBold().FontSize(12);
+                        r.ConstantItem(100).AlignRight().Text(Money(invoice.Total, invoice.Currency))
+                            .SemiBold().FontSize(12);
+                    });
                 });
             });
 

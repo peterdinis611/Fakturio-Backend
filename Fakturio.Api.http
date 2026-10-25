@@ -150,6 +150,12 @@ GET {{host}}/api/reports/customers/top?limit=10&from=2026-01-01&to=2026-12-31
 ### Reports – VAT summary
 GET {{host}}/api/reports/vat?from=2026-01-01&to=2026-12-31
 
+### Export – invoices CSV
+GET {{host}}/api/exports/invoices.csv?from=2026-01-01&to=2026-12-31
+
+### Export – VAT CSV
+GET {{host}}/api/exports/vat.csv?from=2026-01-01&to=2026-12-31
+
 ### Search – global
 GET {{host}}/api/search?q=ACME&limit=20&types=All
 

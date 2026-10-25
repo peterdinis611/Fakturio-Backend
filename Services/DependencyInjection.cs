@@ -3,6 +3,7 @@ using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Services.Company;
 using Fakturio.Api.Services.Customers;
+using Fakturio.Api.Services.Exports;
 using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Search;
@@ -31,6 +32,7 @@ public static class DependencyInjection
         services.AddScoped<IReportService, CachingReportService>();
 
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();
+        services.AddScoped<IExportService, CsvExportService>();
 
         return services;
     }
