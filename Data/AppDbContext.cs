@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
+    public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,11 +28,50 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(c => c.Ico);
         });
 
+        modelBuilder.Entity<CompanySettings>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.Name).HasMaxLength(200).IsRequired();
+            entity.Property(c => c.Ico).HasMaxLength(20);
+            entity.Property(c => c.Dic).HasMaxLength(20);
+            entity.Property(c => c.IcDph).HasMaxLength(30);
+            entity.Property(c => c.Email).HasMaxLength(200);
+            entity.Property(c => c.Phone).HasMaxLength(50);
+            entity.Property(c => c.Street).HasMaxLength(200);
+            entity.Property(c => c.City).HasMaxLength(100);
+            entity.Property(c => c.PostalCode).HasMaxLength(20);
+            entity.Property(c => c.Country).HasMaxLength(2).HasDefaultValue("SK");
+            entity.Property(c => c.BankIban).HasMaxLength(34);
+            entity.Property(c => c.BankBic).HasMaxLength(11);
+            entity.Property(c => c.BankName).HasMaxLength(100);
+            entity.Property(c => c.DefaultVatRate).HasPrecision(5, 2);
+            entity.Property(c => c.DefaultCurrency).HasMaxLength(3).HasDefaultValue("EUR");
+            entity.Property(c => c.InvoicePrefix).HasMaxLength(20);
+            entity.Property(c => c.Notes).HasMaxLength(2000);
+        });
+
         modelBuilder.Entity<Invoice>(entity =>
         {
             entity.HasKey(i => i.Id);
             entity.Property(i => i.Number).HasMaxLength(50).IsRequired();
             entity.HasIndex(i => i.Number).IsUnique();
+            entity.Property(i => i.CustomerName).HasMaxLength(200).IsRequired();
+            entity.Property(i => i.CustomerIco).HasMaxLength(20);
+            entity.Property(i => i.CustomerDic).HasMaxLength(20);
+            entity.Property(i => i.CustomerIcDph).HasMaxLength(30);
+            entity.Property(i => i.CustomerEmail).HasMaxLength(200);
+            entity.Property(i => i.CustomerStreet).HasMaxLength(200);
+            entity.Property(i => i.CustomerCity).HasMaxLength(100);
+            entity.Property(i => i.CustomerPostalCode).HasMaxLength(20);
+            entity.Property(i => i.CustomerCountry).HasMaxLength(2).HasDefaultValue("SK");
+            entity.Property(i => i.SellerName).HasMaxLength(200);
+            entity.Property(i => i.SellerIco).HasMaxLength(20);
+            entity.Property(i => i.SellerDic).HasMaxLength(20);
+            entity.Property(i => i.SellerIcDph).HasMaxLength(30);
+            entity.Property(i => i.SellerStreet).HasMaxLength(200);
+            entity.Property(i => i.SellerCity).HasMaxLength(100);
+            entity.Property(i => i.SellerPostalCode).HasMaxLength(20);
+            entity.Property(i => i.SellerCountry).HasMaxLength(2);
             entity.Property(i => i.Currency).HasMaxLength(3).HasDefaultValue("EUR");
             entity.Property(i => i.VariableSymbol).HasMaxLength(20);
             entity.Property(i => i.ConstantSymbol).HasMaxLength(10);
@@ -43,6 +83,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(i => i.Subtotal).HasPrecision(18, 2);
             entity.Property(i => i.VatTotal).HasPrecision(18, 2);
             entity.Property(i => i.Total).HasPrecision(18, 2);
+            entity.HasIndex(i => i.Status);
+            entity.HasIndex(i => i.IssueDate);
             entity.HasOne(i => i.Customer)
                 .WithMany(c => c.Invoices)
                 .HasForeignKey(i => i.CustomerId)

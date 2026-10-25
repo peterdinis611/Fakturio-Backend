@@ -6,26 +6,31 @@ namespace Fakturio.Api.Services;
 public class InvoiceNumberService(AppDbContext db)
 {
     /// <summary>
-    /// Generates sequential invoice numbers in format YYYYNNNN (e.g. 20260001).
+    /// Generates sequential invoice numbers: [prefix]YYYYNNNN (e.g. FA20260001).
     /// </summary>
-    public async Task<string> NextAsync(CancellationToken ct = default)
+    public async Task<string> NextAsync(string? prefix = null, CancellationToken ct = default)
     {
         var year = DateTime.UtcNow.Year;
-        var prefix = $"{year}";
+        var cleanPrefix = string.IsNullOrWhiteSpace(prefix) ? string.Empty : prefix.Trim();
+        var yearPart = $"{year}";
+        var startsWith = $"{cleanPrefix}{yearPart}";
 
         var lastNumber = await db.Invoices
-            .Where(i => i.Number.StartsWith(prefix))
+            .Where(i => i.Number.StartsWith(startsWith))
             .OrderByDescending(i => i.Number)
             .Select(i => i.Number)
             .FirstOrDefaultAsync(ct);
 
         var sequence = 1;
-        if (lastNumber is not null && lastNumber.Length >= 8
-            && int.TryParse(lastNumber[4..], out var parsed))
+        if (lastNumber is not null)
         {
-            sequence = parsed + 1;
+            var digits = new string(lastNumber.Reverse().TakeWhile(char.IsDigit).Reverse().ToArray());
+            if (digits.Length >= 4 && int.TryParse(digits[^4..], out var parsed))
+                sequence = parsed + 1;
+            else if (int.TryParse(digits, out parsed))
+                sequence = parsed + 1;
         }
 
-        return $"{year}{sequence:D4}";
+        return $"{cleanPrefix}{yearPart}{sequence:D4}";
     }
 }

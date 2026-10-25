@@ -3,6 +3,28 @@
 ### Health
 GET {{host}}/api/health
 
+### Upsert company (seller)
+PUT {{host}}/api/company
+Content-Type: application/json
+
+{
+  "name": "Fakturio s.r.o.",
+  "ico": "36000001",
+  "dic": "2020328755",
+  "icDph": "SK2020328755",
+  "email": "info@fakturio.sk",
+  "street": "Dunajská 1",
+  "city": "Bratislava",
+  "postalCode": "811 08",
+  "country": "SK",
+  "bankIban": "SK3112000000198742637541",
+  "bankBic": "GIBASKBX",
+  "defaultDueDays": 14,
+  "defaultVatRate": 23,
+  "defaultCurrency": "EUR",
+  "invoicePrefix": "FA"
+}
+
 ### Create customer
 # @name createCustomer
 POST {{host}}/api/customers
@@ -10,31 +32,27 @@ Content-Type: application/json
 
 {
   "name": "ACME s.r.o.",
-  "ico": "12345678",
-  "dic": "2123456789",
-  "icDph": "SK2123456789",
+  "ico": "35757442",
+  "dic": "2020263435",
+  "icDph": "SK2020263435",
   "email": "faktury@acme.sk",
   "street": "Hlavná 1",
   "city": "Bratislava",
-  "postalCode": "81101",
+  "postalCode": "811 01",
   "country": "SK"
 }
 
-### List customers
-GET {{host}}/api/customers
+### List customers (paged)
+GET {{host}}/api/customers?page=1&pageSize=20&search=ACME
 
-### Create invoice
-@customerId = {{createCustomer.response.body.$.id}}
+### Create invoice (draft)
+# @name createInvoice
 POST {{host}}/api/invoices
 Content-Type: application/json
 
 {
-  "customerId": "{{customerId}}",
-  "issueDate": "2026-10-25",
-  "dueDate": "2026-11-08",
-  "currency": "EUR",
-  "bankIban": "SK3112000000198742637541",
-  "notes": "Ďakujeme za spoluprácu.",
+  "customerId": "{{createCustomer.response.body.$.id}}",
+  "status": "Draft",
   "items": [
     {
       "description": "Web development – október 2026",
@@ -53,5 +71,27 @@ Content-Type: application/json
   ]
 }
 
+### Issue invoice
+PATCH {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/status
+Content-Type: application/json
+
+{
+  "status": "Issued"
+}
+
+### Duplicate invoice
+POST {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/duplicate
+
 ### List invoices
-GET {{host}}/api/invoices
+GET {{host}}/api/invoices?page=1&pageSize=20
+
+### Invalid customer (validation demo)
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{
+  "name": "",
+  "ico": "123",
+  "email": "not-an-email",
+  "postalCode": "ABC"
+}
