@@ -21,4 +21,11 @@ public static class ErrorCodes
     public const string InvalidPaidAt = "invalid_paid_at";
     public const string InvalidStatus = "invalid_status";
     public const string UseCancelEndpoint = "use_cancel_endpoint";
+    public const string InvalidDateRange = "invalid_date_range";
+    public const string DateRangeTooLarge = "date_range_too_large";
+    public const string InvalidSearchQuery = "invalid_search_query";
+    public const string InvalidInvoiceTotal = "invalid_invoice_total";
+    public const string InvalidInvoiceItems = "invalid_invoice_items";
+    public const string DuplicateEmail = "duplicate_email";
+    public const string EmptyGuid = "empty_guid";
 }

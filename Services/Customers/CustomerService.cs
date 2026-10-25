@@ -18,18 +18,18 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         string? search,
         CancellationToken ct = default)
     {
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, 100);
+        (page, pageSize) = ServiceGuards.NormalizePaging(page, pageSize);
+        var term = ServiceGuards.NormalizeOptionalSearch(search);
 
         var query = db.Customers.AsNoTracking().AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(search))
+        if (term is not null)
         {
-            var term = search.Trim();
             query = query.Where(c =>
                 c.Name.Contains(term) ||
                 (c.Ico != null && c.Ico.Contains(term)) ||
-                (c.Email != null && c.Email.Contains(term)));
+                (c.Email != null && c.Email.Contains(term)) ||
+                (c.City != null && c.City.Contains(term)));
         }
 
         var totalCount = await query.CountAsync(ct);
@@ -54,6 +54,9 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
 
     public async Task<CustomerResponse?> GetAsync(Guid id, CancellationToken ct = default)
     {
+        if (id == Guid.Empty)
+            return null;
+
         var customer = await db.Customers
             .AsNoTracking()
             .Where(c => c.Id == id)
@@ -69,13 +72,28 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         CreateCustomerRequest request,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return ServiceResult<CustomerResponse>.BadRequest("Name is required.", ErrorCodes.BadRequest);
+
         if (!string.IsNullOrWhiteSpace(request.Ico))
         {
-            var exists = await db.Customers.AnyAsync(c => c.Ico == request.Ico.Trim(), ct);
+            var ico = request.Ico.Trim();
+            var exists = await db.Customers.AnyAsync(c => c.Ico == ico, ct);
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",
                     ErrorCodes.DuplicateIco);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            var emailExists = await db.Customers.AnyAsync(
+                c => c.Email != null && c.Email.ToLower() == email, ct);
+            if (emailExists)
+                return ServiceResult<CustomerResponse>.Conflict(
+                    "A customer with this email already exists.",
+                    ErrorCodes.DuplicateEmail);
         }
 
         var customer = new Customer();
@@ -91,6 +109,12 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         UpdateCustomerRequest request,
         CancellationToken ct = default)
     {
+        if (ServiceGuards.ValidateGuid(id, "Customer", ErrorCodes.EmptyGuid) is { } guidError)
+            return Fail<CustomerResponse>(guidError);
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return ServiceResult<CustomerResponse>.BadRequest("Name is required.", ErrorCodes.BadRequest);
+
         var customer = await db.Customers.FindAsync([id], ct);
         if (customer is null)
             return ServiceResult<CustomerResponse>.NotFound("Customer not found.", ErrorCodes.NotFound);
@@ -105,6 +129,17 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
                     ErrorCodes.DuplicateIco);
         }
 
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = request.Email.Trim().ToLowerInvariant();
+            var emailExists = await db.Customers.AnyAsync(
+                c => c.Id != id && c.Email != null && c.Email.ToLower() == email, ct);
+            if (emailExists)
+                return ServiceResult<CustomerResponse>.Conflict(
+                    "A customer with this email already exists.",
+                    ErrorCodes.DuplicateEmail);
+        }
+
         CustomerMapper.Apply(customer, request);
         await SaveAndInvalidateAsync(ct);
 
@@ -114,6 +149,9 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
 
     public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
+        if (ServiceGuards.ValidateGuid(id, "Customer", ErrorCodes.EmptyGuid) is { } guidError)
+            return guidError;
+
         var customer = await db.Customers.FindAsync([id], ct);
         if (customer is null)
             return ServiceResult.NotFound("Customer not found.", ErrorCodes.NotFound);
@@ -134,4 +172,7 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         await db.SaveChangesAsync(ct);
         await cache.InvalidateReportsAsync(ct);
     }
+
+    private static ServiceResult<T> Fail<T>(ServiceResult error) =>
+        ServiceResult<T>.Fail(error.Error!, error.StatusCode, error.ErrorCode);
 }

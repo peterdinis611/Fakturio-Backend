@@ -19,17 +19,23 @@ public class InvoiceService(
         InvoiceListQuery query,
         CancellationToken ct = default)
     {
-        var page = Math.Max(1, query.Page);
-        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var (page, pageSize) = ServiceGuards.NormalizePaging(query.Page, query.PageSize);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var search = ServiceGuards.NormalizeOptionalSearch(query.Search);
 
         var invoices = db.Invoices.AsNoTracking().AsQueryable();
 
         if (query.Status.HasValue)
             invoices = invoices.Where(i => i.Status == query.Status.Value);
 
-        if (query.CustomerId.HasValue)
+        if (query.CustomerId.HasValue && query.CustomerId.Value != Guid.Empty)
             invoices = invoices.Where(i => i.CustomerId == query.CustomerId.Value);
+
+        if (query.IssueFrom.HasValue && query.IssueTo.HasValue && query.IssueFrom > query.IssueTo)
+        {
+            // Invalid range → empty page instead of throwing on list endpoints.
+            return new PagedResponse<InvoiceListItemResponse>([], page, pageSize, 0, 0);
+        }
 
         if (query.IssueFrom.HasValue)
             invoices = invoices.Where(i => i.IssueDate >= query.IssueFrom.Value);
@@ -45,13 +51,13 @@ public class InvoiceService(
                 && i.PaidAt == null);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Search))
+        if (search is not null)
         {
-            var term = query.Search.Trim();
             invoices = invoices.Where(i =>
-                i.Number.Contains(term) ||
-                i.CustomerName.Contains(term) ||
-                (i.VariableSymbol != null && i.VariableSymbol.Contains(term)));
+                i.Number.Contains(search) ||
+                i.CustomerName.Contains(search) ||
+                (i.VariableSymbol != null && i.VariableSymbol.Contains(search)) ||
+                (i.CustomerIco != null && i.CustomerIco.Contains(search)));
         }
 
         var totalCount = await invoices.CountAsync(ct);
@@ -97,6 +103,12 @@ public class InvoiceService(
         CreateInvoiceRequest request,
         CancellationToken ct = default)
     {
+        if (ServiceGuards.ValidateGuid(request.CustomerId, "Customer", ErrorCodes.EmptyGuid) is { } guidError)
+            return Fail<InvoiceResponse>(guidError);
+
+        if (ServiceGuards.EnsureHasItems(request.Items?.Count ?? 0) is { } itemsError)
+            return Fail<InvoiceResponse>(itemsError);
+
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
             return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
@@ -105,12 +117,21 @@ public class InvoiceService(
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDays = company?.DefaultDueDays ?? 14;
         var dueDate = request.DueDate ?? issueDate.AddDays(dueDays);
+
+        if (ServiceGuards.ValidateInvoiceDates(issueDate, dueDate, request.DeliveryDate) is { } dateError)
+            return Fail<InvoiceResponse>(dateError);
+
         var defaultVat = company?.DefaultVatRate ?? 23m;
         var currency = string.IsNullOrWhiteSpace(request.Currency)
             ? company?.DefaultCurrency ?? "EUR"
             : request.Currency.Trim().ToUpperInvariant();
 
         var status = request.Status ?? InvoiceStatus.Issued;
+        if (status is not (InvoiceStatus.Draft or InvoiceStatus.Issued))
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "New invoices can only be Draft or Issued.",
+                ErrorCodes.InvalidStatus);
+
         var number = await numbers.NextAsync(company?.InvoicePrefix, ct);
 
         var invoice = new Invoice
@@ -122,19 +143,26 @@ public class InvoiceService(
             DeliveryDate = request.DeliveryDate,
             Currency = currency,
             VariableSymbol = request.VariableSymbol ?? DigitsOnly(number),
-            ConstantSymbol = request.ConstantSymbol,
+            ConstantSymbol = request.ConstantSymbol ?? company?.DefaultConstantSymbol,
             SpecificSymbol = request.SpecificSymbol,
-            PaymentMethod = request.PaymentMethod ?? "bank_transfer",
+            PaymentMethod = request.PaymentMethod
+                ?? company?.DefaultPaymentMethod
+                ?? "bank_transfer",
             BankIban = NormalizeIban(request.BankIban) ?? company?.BankIban,
             BankBic = request.BankBic?.Trim().ToUpperInvariant() ?? company?.BankBic,
-            Notes = request.Notes?.Trim() ?? company?.Notes,
+            Notes = request.Notes?.Trim()
+                ?? company?.DefaultInvoiceNotes
+                ?? company?.Notes,
             PaidAt = status == InvoiceStatus.Paid ? issueDate : null
         };
 
         InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
         InvoiceMapper.ApplySellerSnapshot(invoice, company);
-        InvoiceMapper.ReplaceItems(invoice, request.Items, defaultVat);
+        InvoiceMapper.ReplaceItems(invoice, request.Items!, defaultVat);
         InvoiceCalculator.RecalculateTotals(invoice);
+
+        if (ServiceGuards.EnsurePositiveTotal(invoice.Total) is { } totalError)
+            return Fail<InvoiceResponse>(totalError);
 
         db.Invoices.Add(invoice);
         await SaveAndInvalidateAsync(ct);
@@ -159,6 +187,15 @@ public class InvoiceService(
                 "Only draft invoices can be fully updated.",
                 ErrorCodes.NotDraft);
 
+        if (ServiceGuards.ValidateGuid(request.CustomerId, "Customer", ErrorCodes.EmptyGuid) is { } guidError)
+            return Fail<InvoiceResponse>(guidError);
+
+        if (ServiceGuards.EnsureHasItems(request.Items?.Count ?? 0) is { } itemsError)
+            return Fail<InvoiceResponse>(itemsError);
+
+        if (ServiceGuards.ValidateInvoiceDates(request.IssueDate, request.DueDate, request.DeliveryDate) is { } dateError)
+            return Fail<InvoiceResponse>(dateError);
+
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
             return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
@@ -180,8 +217,11 @@ public class InvoiceService(
         invoice.Notes = request.Notes?.Trim();
 
         InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
-        InvoiceMapper.ReplaceItems(invoice, request.Items, company?.DefaultVatRate ?? 23m);
+        InvoiceMapper.ReplaceItems(invoice, request.Items!, company?.DefaultVatRate ?? 23m);
         InvoiceCalculator.RecalculateTotals(invoice);
+
+        if (ServiceGuards.EnsurePositiveTotal(invoice.Total) is { } totalError)
+            return Fail<InvoiceResponse>(totalError);
 
         await SaveAndInvalidateAsync(ct);
         return ServiceResult<InvoiceResponse>.Ok(InvoiceMapper.ToResponse(invoice));
@@ -496,6 +536,9 @@ public class InvoiceService(
         await db.SaveChangesAsync(ct);
         await cache.InvalidateReportsAsync(ct);
     }
+
+    private static ServiceResult<T> Fail<T>(ServiceResult error) =>
+        ServiceResult<T>.Fail(error.Error!, error.StatusCode, error.ErrorCode);
 
     private static string DigitsOnly(string value) =>
         new(value.Where(char.IsDigit).ToArray());

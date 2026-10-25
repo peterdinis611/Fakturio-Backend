@@ -18,6 +18,8 @@ public static class CacheKeys
         $"reports:vat:{Format(from)}:{Format(to)}";
 
     public const string CompanySettings = "company:settings";
+    public const string CompanySummary = "company:summary";
+    public const string CompanyStatus = "company:status";
 
     private static string Format(DateOnly? value) =>
         value?.ToString("yyyyMMdd") ?? "_";

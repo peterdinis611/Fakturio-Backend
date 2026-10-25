@@ -2,98 +2,149 @@ using Fakturio.Api.Caching;
 using Fakturio.Api.Configuration;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
+using Fakturio.Api.Services.Common;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Options;
 
 namespace Fakturio.Api.Services.Reports;
 
 /// <summary>
-/// Decorator that caches expensive report reads via HybridCache.
+/// Decorator that caches successful report reads via HybridCache.
+/// Validation failures are not cached.
 /// </summary>
 public sealed class CachingReportService(
     ReportService inner,
     HybridCache cache,
     IOptions<CacheOptions> options) : IReportService
 {
-    public Task<ReportOverviewResponse> GetOverviewAsync(
+    public async Task<ServiceResult<ReportOverviewResponse>> GetOverviewAsync(
         DateOnly? from,
         DateOnly? to,
         CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetOverviewAsync(from, to, ct);
+            return await inner.GetOverviewAsync(from, to, ct);
+
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail<ReportOverviewResponse>(rangeError);
 
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
-        return cache.GetOrCreateAsync(
+        var data = await cache.GetOrCreateAsync(
             CacheKeys.ReportOverview(from, to, asOf),
-            async cancel => await inner.GetOverviewAsync(from, to, cancel),
+            async cancel =>
+            {
+                var result = await inner.GetOverviewAsync(from, to, cancel);
+                return result.Data!;
+            },
             new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
             tags: [CacheTags.Reports],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
+
+        return ServiceResult<ReportOverviewResponse>.Ok(data);
     }
 
-    public Task<MonthlyRevenueResponse> GetMonthlyRevenueAsync(
+    public async Task<ServiceResult<MonthlyRevenueResponse>> GetMonthlyRevenueAsync(
         int? year,
         CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetMonthlyRevenueAsync(year, ct);
+            return await inner.GetMonthlyRevenueAsync(year, ct);
 
         var selectedYear = year ?? DateTime.UtcNow.Year;
-        return cache.GetOrCreateAsync(
+        if (ServiceGuards.ValidateYear(selectedYear) is { } yearError)
+            return Fail<MonthlyRevenueResponse>(yearError);
+
+        var data = await cache.GetOrCreateAsync(
             CacheKeys.ReportMonthly(selectedYear),
-            async cancel => await inner.GetMonthlyRevenueAsync(selectedYear, cancel),
+            async cancel =>
+            {
+                var result = await inner.GetMonthlyRevenueAsync(selectedYear, cancel);
+                return result.Data!;
+            },
             new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
             tags: [CacheTags.Reports],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
+
+        return ServiceResult<MonthlyRevenueResponse>.Ok(data);
     }
 
-    public Task<AgingReportResponse> GetAgingAsync(
+    public async Task<ServiceResult<AgingReportResponse>> GetAgingAsync(
         int largestLimit = 10,
         CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetAgingAsync(largestLimit, ct);
+            return await inner.GetAgingAsync(largestLimit, ct);
+
+        var result = await inner.GetAgingAsync(largestLimit, ct);
+        if (!result.Success)
+            return result;
 
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
-        return cache.GetOrCreateAsync(
+        var data = await cache.GetOrCreateAsync(
             CacheKeys.ReportAging(asOf, largestLimit),
-            async cancel => await inner.GetAgingAsync(largestLimit, cancel),
+            async cancel =>
+            {
+                var innerResult = await inner.GetAgingAsync(largestLimit, cancel);
+                return innerResult.Data!;
+            },
             new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
             tags: [CacheTags.Reports],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
+
+        return ServiceResult<AgingReportResponse>.Ok(data);
     }
 
-    public Task<TopCustomersReportResponse> GetTopCustomersAsync(
+    public async Task<ServiceResult<TopCustomersReportResponse>> GetTopCustomersAsync(
         DateOnly? from,
         DateOnly? to,
         int limit = 10,
         CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetTopCustomersAsync(from, to, limit, ct);
+            return await inner.GetTopCustomersAsync(from, to, limit, ct);
 
-        return cache.GetOrCreateAsync(
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail<TopCustomersReportResponse>(rangeError);
+
+        var data = await cache.GetOrCreateAsync(
             CacheKeys.ReportTopCustomers(from, to, limit),
-            async cancel => await inner.GetTopCustomersAsync(from, to, limit, cancel),
+            async cancel =>
+            {
+                var result = await inner.GetTopCustomersAsync(from, to, limit, cancel);
+                return result.Data!;
+            },
             new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
             tags: [CacheTags.Reports],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
+
+        return ServiceResult<TopCustomersReportResponse>.Ok(data);
     }
 
-    public Task<VatReportResponse> GetVatSummaryAsync(
+    public async Task<ServiceResult<VatReportResponse>> GetVatSummaryAsync(
         DateOnly? from,
         DateOnly? to,
         CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetVatSummaryAsync(from, to, ct);
+            return await inner.GetVatSummaryAsync(from, to, ct);
 
-        return cache.GetOrCreateAsync(
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail<VatReportResponse>(rangeError);
+
+        var data = await cache.GetOrCreateAsync(
             CacheKeys.ReportVat(from, to),
-            async cancel => await inner.GetVatSummaryAsync(from, to, cancel),
+            async cancel =>
+            {
+                var result = await inner.GetVatSummaryAsync(from, to, cancel);
+                return result.Data!;
+            },
             new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
             tags: [CacheTags.Reports],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
+
+        return ServiceResult<VatReportResponse>.Ok(data);
     }
+
+    private static ServiceResult<T> Fail<T>(ServiceResult error) =>
+        ServiceResult<T>.Fail(error.Error!, error.StatusCode, error.ErrorCode);
 }

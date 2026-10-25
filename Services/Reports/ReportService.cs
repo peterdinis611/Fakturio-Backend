@@ -1,6 +1,8 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
+using Fakturio.Api.Services.Common;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
 using Microsoft.EntityFrameworkCore;
@@ -11,11 +13,14 @@ public class ReportService(AppDbContext db) : IReportService
 {
     private const string DefaultCurrency = "EUR";
 
-    public async Task<ReportOverviewResponse> GetOverviewAsync(
+    public async Task<ServiceResult<ReportOverviewResponse>> GetOverviewAsync(
         DateOnly? from,
         DateOnly? to,
         CancellationToken ct = default)
     {
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail<ReportOverviewResponse>(rangeError);
+
         var today = Today();
         var invoices = await LoadInvoicesAsync(from, to, includeItems: false, ct);
 
@@ -49,7 +54,7 @@ public class ReportService(AppDbContext db) : IReportService
             .Where(x => x.Count > 0)
             .ToList();
 
-        return new ReportOverviewResponse(
+        return Ok(new ReportOverviewResponse(
             from,
             to,
             today,
@@ -70,14 +75,16 @@ public class ReportService(AppDbContext db) : IReportService
             paymentDays.Count == 0 ? null : Math.Round(paymentDays.Average(), 1),
             collectionRate,
             DefaultCurrency,
-            byStatus);
+            byStatus));
     }
 
-    public async Task<MonthlyRevenueResponse> GetMonthlyRevenueAsync(
+    public async Task<ServiceResult<MonthlyRevenueResponse>> GetMonthlyRevenueAsync(
         int? year,
         CancellationToken ct = default)
     {
         var selectedYear = year ?? DateTime.UtcNow.Year;
+        if (ServiceGuards.ValidateYear(selectedYear) is { } yearError)
+            return Fail<MonthlyRevenueResponse>(yearError);
         var from = new DateOnly(selectedYear, 1, 1);
         var to = new DateOnly(selectedYear, 12, 31);
 
@@ -120,18 +127,23 @@ public class ReportService(AppDbContext db) : IReportService
                 outstanding.Sum(i => i.Total));
         }).ToList();
 
-        return new MonthlyRevenueResponse(
+        return Ok(new MonthlyRevenueResponse(
             selectedYear,
             DefaultCurrency,
             months,
             months.Sum(m => m.IssuedAmount),
-            months.Sum(m => m.PaidAmount));
+            months.Sum(m => m.PaidAmount)));
     }
 
-    public async Task<AgingReportResponse> GetAgingAsync(
+    public async Task<ServiceResult<AgingReportResponse>> GetAgingAsync(
         int largestLimit = 10,
         CancellationToken ct = default)
     {
+        if (largestLimit < 1 || largestLimit > 50)
+            return ServiceResult<AgingReportResponse>.BadRequest(
+                "largestLimit must be between 1 and 50.",
+                ErrorCodes.BadRequest);
+
         largestLimit = Math.Clamp(largestLimit, 1, 50);
         var today = Today();
 
@@ -187,20 +199,28 @@ public class ReportService(AppDbContext db) : IReportService
                 i.Status))
             .ToList();
 
-        return new AgingReportResponse(
+        return Ok(new AgingReportResponse(
             today,
             DefaultCurrency,
             open.Sum(i => i.Total),
             buckets,
-            largest);
+            largest));
     }
 
-    public async Task<TopCustomersReportResponse> GetTopCustomersAsync(
+    public async Task<ServiceResult<TopCustomersReportResponse>> GetTopCustomersAsync(
         DateOnly? from,
         DateOnly? to,
         int limit = 10,
         CancellationToken ct = default)
     {
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail<TopCustomersReportResponse>(rangeError);
+
+        if (limit < 1 || limit > 50)
+            return ServiceResult<TopCustomersReportResponse>.BadRequest(
+                "limit must be between 1 and 50.",
+                ErrorCodes.BadRequest);
+
         limit = Math.Clamp(limit, 1, 50);
         var invoices = (await LoadInvoicesAsync(from, to, includeItems: false, ct))
             .Where(i => i.Status != InvoiceStatus.Cancelled && i.Status != InvoiceStatus.Draft)
@@ -243,14 +263,17 @@ public class ReportService(AppDbContext db) : IReportService
             .Take(limit)
             .ToList();
 
-        return new TopCustomersReportResponse(from, to, DefaultCurrency, customers);
+        return Ok(new TopCustomersReportResponse(from, to, DefaultCurrency, customers));
     }
 
-    public async Task<VatReportResponse> GetVatSummaryAsync(
+    public async Task<ServiceResult<VatReportResponse>> GetVatSummaryAsync(
         DateOnly? from,
         DateOnly? to,
         CancellationToken ct = default)
     {
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail<VatReportResponse>(rangeError);
+
         var invoices = (await LoadInvoicesAsync(from, to, includeItems: true, ct))
             .Where(i => i.Status is InvoiceStatus.Issued or InvoiceStatus.Paid or InvoiceStatus.Overdue)
             .ToList();
@@ -278,14 +301,14 @@ public class ReportService(AppDbContext db) : IReportService
                 g.Sum(x => x.Gross)))
             .ToList();
 
-        return new VatReportResponse(
+        return Ok(new VatReportResponse(
             from,
             to,
             DefaultCurrency,
             byRate.Sum(x => x.TaxBase),
             byRate.Sum(x => x.VatAmount),
             byRate.Sum(x => x.GrossAmount),
-            byRate);
+            byRate));
     }
 
     private async Task<List<Invoice>> LoadInvoicesAsync(
@@ -305,6 +328,11 @@ public class ReportService(AppDbContext db) : IReportService
 
         return await query.ToListAsync(ct);
     }
+
+    private static ServiceResult<T> Ok<T>(T data) => ServiceResult<T>.Ok(data);
+
+    private static ServiceResult<T> Fail<T>(ServiceResult error) =>
+        ServiceResult<T>.Fail(error.Error!, error.StatusCode, error.ErrorCode);
 
     private static DateOnly Today() => DateOnly.FromDateTime(DateTime.UtcNow);
 }

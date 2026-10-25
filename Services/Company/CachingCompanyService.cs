@@ -2,6 +2,7 @@ using Fakturio.Api.Caching;
 using Fakturio.Api.Configuration;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
+using Fakturio.Api.Services.Common;
 using Microsoft.Extensions.Caching.Hybrid;
 using Microsoft.Extensions.Options;
 
@@ -25,11 +26,39 @@ public sealed class CachingCompanyService(
             cancellationToken: ct).AsTask();
     }
 
-    public async Task<CompanySettingsResponse> UpdateAsync(
+    public Task<CompanySummaryResponse> GetSummaryAsync(CancellationToken ct = default)
+    {
+        if (!options.Value.Enabled)
+            return inner.GetSummaryAsync(ct);
+
+        return cache.GetOrCreateAsync(
+            CacheKeys.CompanySummary,
+            async cancel => await inner.GetSummaryAsync(cancel),
+            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
+            tags: [CacheTags.Company],
+            cancellationToken: ct).AsTask();
+    }
+
+    public Task<CompanyCompletenessResponse> GetStatusAsync(CancellationToken ct = default)
+    {
+        if (!options.Value.Enabled)
+            return inner.GetStatusAsync(ct);
+
+        return cache.GetOrCreateAsync(
+            CacheKeys.CompanyStatus,
+            async cancel => await inner.GetStatusAsync(cancel),
+            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
+            tags: [CacheTags.Company],
+            cancellationToken: ct).AsTask();
+    }
+
+    public Task<ServiceResult<CompanySettingsResponse>> UpdateAsync(
         UpdateCompanySettingsRequest request,
         CancellationToken ct = default)
-    {
-        // Inner service invalidates company (+ reports) after save.
-        return await inner.UpdateAsync(request, ct);
-    }
+        => inner.UpdateAsync(request, ct);
+
+    public Task<ServiceResult<CompanySettingsResponse>> UpdateDefaultsAsync(
+        UpdateCompanyDefaultsRequest request,
+        CancellationToken ct = default)
+        => inner.UpdateDefaultsAsync(request, ct);
 }

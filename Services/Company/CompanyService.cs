@@ -1,9 +1,11 @@
 using Fakturio.Api.Caching;
+using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
+using Fakturio.Api.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Company;
@@ -16,16 +18,46 @@ public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompany
         return CompanyMapper.ToResponse(company);
     }
 
-    public async Task<CompanySettingsResponse> UpdateAsync(
+    public async Task<CompanySummaryResponse> GetSummaryAsync(CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        return CompanyMapper.ToSummary(company);
+    }
+
+    public async Task<CompanyCompletenessResponse> GetStatusAsync(CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        return CompanyMapper.BuildCompleteness(company);
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> UpdateAsync(
         UpdateCompanySettingsRequest request,
         CancellationToken ct = default)
     {
+        if (string.IsNullOrWhiteSpace(request.Name))
+            return ServiceResult<CompanySettingsResponse>.BadRequest(
+                "Company name is required.",
+                ErrorCodes.BadRequest);
+
+        if (request.IsVatPayer == true && string.IsNullOrWhiteSpace(request.IcDph))
+            return ServiceResult<CompanySettingsResponse>.BadRequest(
+                "IČ DPH is required when the company is a VAT payer.",
+                ErrorCodes.BadRequest);
+
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.Apply(company, request);
-        await db.SaveChangesAsync(ct);
-        await cache.InvalidateCompanyAsync(ct);
-        await cache.InvalidateReportsAsync(ct);
-        return CompanyMapper.ToResponse(company);
+        await SaveAndInvalidateAsync(ct);
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> UpdateDefaultsAsync(
+        UpdateCompanyDefaultsRequest request,
+        CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        CompanyMapper.ApplyDefaults(company, request);
+        await SaveAndInvalidateAsync(ct);
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
     private async Task<CompanySettings> GetOrCreateAsync(CancellationToken ct)
@@ -40,10 +72,19 @@ public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompany
             DefaultDueDays = 14,
             DefaultVatRate = 23m,
             DefaultCurrency = "EUR",
-            Country = "SK"
+            DefaultPaymentMethod = "bank_transfer",
+            Country = "SK",
+            IsVatPayer = true
         };
         db.CompanySettings.Add(company);
         await db.SaveChangesAsync(ct);
         return company;
+    }
+
+    private async Task SaveAndInvalidateAsync(CancellationToken ct)
+    {
+        await db.SaveChangesAsync(ct);
+        await cache.InvalidateCompanyAsync(ct);
+        await cache.InvalidateReportsAsync(ct);
     }
 }

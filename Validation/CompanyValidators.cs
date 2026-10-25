@@ -5,11 +5,23 @@ namespace Fakturio.Api.Validation;
 
 public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCompanySettingsRequest>
 {
+    private static readonly HashSet<string> AllowedPaymentMethods =
+        ["bank_transfer", "cash", "card", "other"];
+
+    private static readonly HashSet<string> AllowedLegalForms =
+    [
+        "s.r.o.", "a.s.", "k.s.", "v.o.s.", "živnosť", "SZČO", "družstvo", "iné"
+    ];
+
     public UpdateCompanySettingsRequestValidator()
     {
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Company name is required.")
             .MaximumLength(200);
+
+        RuleFor(x => x.LegalForm)
+            .Must(f => f is null || AllowedLegalForms.Contains(f))
+            .WithMessage("Legal form must be one of: s.r.o., a.s., k.s., v.o.s., živnosť, SZČO, družstvo, iné.");
 
         RuleFor(x => x.Ico)
             .Must(SlovakValidators.BeValidIco)
@@ -23,12 +35,31 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
             .Must(SlovakValidators.BeValidIcDph)
             .WithMessage("IČ DPH must match format SK + 10 digits.");
 
+        RuleFor(x => x.IcDph)
+            .NotEmpty()
+            .When(x => x.IsVatPayer == true)
+            .WithMessage("IČ DPH is required when the company is a VAT payer.");
+
+        RuleFor(x => x.CommercialRegister).MaximumLength(500);
+
         RuleFor(x => x.Email)
             .EmailAddress()
             .When(x => !string.IsNullOrWhiteSpace(x.Email))
             .MaximumLength(200);
 
+        RuleFor(x => x.InvoiceEmail)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.InvoiceEmail))
+            .MaximumLength(200);
+
         RuleFor(x => x.Phone).MaximumLength(50);
+        RuleFor(x => x.Website)
+            .MaximumLength(300)
+            .Must(BeValidUrl)
+            .When(x => !string.IsNullOrWhiteSpace(x.Website))
+            .WithMessage("Website must be a valid http(s) URL.");
+
+        RuleFor(x => x.ContactPerson).MaximumLength(200);
         RuleFor(x => x.Street).MaximumLength(200);
         RuleFor(x => x.City).MaximumLength(100);
 
@@ -52,23 +83,88 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
 
         RuleFor(x => x.DefaultDueDays)
             .InclusiveBetween(0, 365)
-            .When(x => x.DefaultDueDays.HasValue)
-            .WithMessage("Default due days must be between 0 and 365.");
+            .When(x => x.DefaultDueDays.HasValue);
 
         RuleFor(x => x.DefaultVatRate)
             .Must(rate => rate is null || SlovakValidators.BeAllowedVatRate(rate.Value))
             .WithMessage("Default VAT rate must be one of: 0, 5, 19, 23.");
 
         RuleFor(x => x.DefaultCurrency)
-            .Must(SlovakValidators.BeValidCurrency)
-            .WithMessage("Currency must be a 3-letter ISO code.");
+            .Must(SlovakValidators.BeValidCurrency);
 
         RuleFor(x => x.InvoicePrefix)
             .MaximumLength(20)
             .Matches(@"^[A-Za-z0-9\-]*$")
-            .When(x => !string.IsNullOrWhiteSpace(x.InvoicePrefix))
-            .WithMessage("Invoice prefix may contain letters, digits and dashes only.");
+            .When(x => !string.IsNullOrWhiteSpace(x.InvoicePrefix));
 
+        RuleFor(x => x.DefaultPaymentMethod)
+            .Must(m => m is null || AllowedPaymentMethods.Contains(m))
+            .WithMessage("Payment method must be bank_transfer, cash, card, or other.");
+
+        RuleFor(x => x.DefaultConstantSymbol)
+            .Matches(@"^\d{1,4}$")
+            .When(x => !string.IsNullOrWhiteSpace(x.DefaultConstantSymbol));
+
+        RuleFor(x => x.DefaultInvoiceNotes).MaximumLength(2000);
+        RuleFor(x => x.InvoiceFooter).MaximumLength(2000);
         RuleFor(x => x.Notes).MaximumLength(2000);
+
+        RuleFor(x => x.LogoUrl)
+            .MaximumLength(500)
+            .Must(BeValidUrl)
+            .When(x => !string.IsNullOrWhiteSpace(x.LogoUrl))
+            .WithMessage("LogoUrl must be a valid http(s) URL.");
     }
+
+    private static bool BeValidUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+}
+
+public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCompanyDefaultsRequest>
+{
+    private static readonly HashSet<string> AllowedPaymentMethods =
+        ["bank_transfer", "cash", "card", "other"];
+
+    public UpdateCompanyDefaultsRequestValidator()
+    {
+        RuleFor(x => x.DefaultDueDays)
+            .InclusiveBetween(0, 365)
+            .When(x => x.DefaultDueDays.HasValue);
+
+        RuleFor(x => x.DefaultVatRate)
+            .Must(rate => rate is null || SlovakValidators.BeAllowedVatRate(rate.Value));
+
+        RuleFor(x => x.DefaultCurrency)
+            .Must(SlovakValidators.BeValidCurrency);
+
+        RuleFor(x => x.InvoicePrefix)
+            .MaximumLength(20)
+            .Matches(@"^[A-Za-z0-9\-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.InvoicePrefix));
+
+        RuleFor(x => x.DefaultPaymentMethod)
+            .Must(m => m is null || AllowedPaymentMethods.Contains(m));
+
+        RuleFor(x => x.DefaultConstantSymbol)
+            .Matches(@"^\d{1,4}$")
+            .When(x => !string.IsNullOrWhiteSpace(x.DefaultConstantSymbol));
+
+        RuleFor(x => x.DefaultInvoiceNotes).MaximumLength(2000);
+        RuleFor(x => x.InvoiceFooter).MaximumLength(2000);
+
+        RuleFor(x => x)
+            .Must(HasAtLeastOneField)
+            .WithMessage("At least one default field must be provided.");
+    }
+
+    private static bool HasAtLeastOneField(UpdateCompanyDefaultsRequest x) =>
+        x.DefaultDueDays.HasValue
+        || x.DefaultVatRate.HasValue
+        || x.DefaultCurrency is not null
+        || x.InvoicePrefix is not null
+        || x.DefaultPaymentMethod is not null
+        || x.DefaultConstantSymbol is not null
+        || x.DefaultInvoiceNotes is not null
+        || x.InvoiceFooter is not null;
 }

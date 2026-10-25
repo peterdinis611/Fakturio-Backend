@@ -5,6 +5,7 @@ using Fakturio.Api.Services.Company;
 using Fakturio.Api.Services.Customers;
 using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Reports;
+using Fakturio.Api.Services.Search;
 
 namespace Fakturio.Api.Services;
 
@@ -16,6 +17,7 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoicePdfService, InvoicePdfService>();
         services.AddScoped<ICustomerService, CustomerService>();
+        services.AddScoped<ISearchService, SearchService>();
 
         services.AddScoped<CompanyService>();
         services.AddScoped<ICompanyService, CachingCompanyService>();

@@ -9,19 +9,46 @@ Content-Type: application/json
 
 {
   "name": "Fakturio s.r.o.",
+  "legalForm": "s.r.o.",
   "ico": "36000001",
   "dic": "2020328755",
   "icDph": "SK2020328755",
+  "isVatPayer": true,
+  "commercialRegister": "Obchodný register OS Bratislava I, oddiel Sro, vložka 12345/B",
   "email": "info@fakturio.sk",
+  "invoiceEmail": "faktury@fakturio.sk",
+  "phone": "+421900123456",
+  "website": "https://fakturio.sk",
+  "contactPerson": "Peter Dinis",
   "street": "Dunajská 1",
   "city": "Bratislava",
   "postalCode": "811 08",
   "country": "SK",
   "bankIban": "SK3112000000198742637541",
   "bankBic": "GIBASKBX",
+  "bankName": "VÚB banka",
   "defaultDueDays": 14,
   "defaultVatRate": 23,
   "defaultCurrency": "EUR",
+  "invoicePrefix": "FA",
+  "defaultPaymentMethod": "bank_transfer",
+  "defaultConstantSymbol": "0308",
+  "defaultInvoiceNotes": "Ďakujeme za spoluprácu.",
+  "invoiceFooter": "Spoločnosť je zapísaná v OR."
+}
+
+### Company summary
+GET {{host}}/api/company/summary
+
+### Company status / completeness
+GET {{host}}/api/company/status
+
+### Patch invoice defaults only
+PATCH {{host}}/api/company/defaults
+Content-Type: application/json
+
+{
+  "defaultDueDays": 21,
   "invoicePrefix": "FA"
 }
 
@@ -122,3 +149,15 @@ GET {{host}}/api/reports/customers/top?limit=10&from=2026-01-01&to=2026-12-31
 
 ### Reports – VAT summary
 GET {{host}}/api/reports/vat?from=2026-01-01&to=2026-12-31
+
+### Search – global
+GET {{host}}/api/search?q=ACME&limit=20&types=All
+
+### Search – customers
+GET {{host}}/api/search/customers?q=ACME&page=1&pageSize=20
+
+### Search – invoices
+GET {{host}}/api/search/invoices?q=2026&page=1&pageSize=20
+
+### Search – validation (too short)
+GET {{host}}/api/search?q=a

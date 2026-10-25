@@ -32,11 +32,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasKey(c => c.Id);
             entity.Property(c => c.Name).HasMaxLength(200).IsRequired();
+            entity.Property(c => c.LegalForm).HasMaxLength(50);
             entity.Property(c => c.Ico).HasMaxLength(20);
             entity.Property(c => c.Dic).HasMaxLength(20);
             entity.Property(c => c.IcDph).HasMaxLength(30);
+            entity.Property(c => c.CommercialRegister).HasMaxLength(500);
             entity.Property(c => c.Email).HasMaxLength(200);
+            entity.Property(c => c.InvoiceEmail).HasMaxLength(200);
             entity.Property(c => c.Phone).HasMaxLength(50);
+            entity.Property(c => c.Website).HasMaxLength(300);
+            entity.Property(c => c.ContactPerson).HasMaxLength(200);
             entity.Property(c => c.Street).HasMaxLength(200);
             entity.Property(c => c.City).HasMaxLength(100);
             entity.Property(c => c.PostalCode).HasMaxLength(20);
@@ -47,6 +52,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(c => c.DefaultVatRate).HasPrecision(5, 2);
             entity.Property(c => c.DefaultCurrency).HasMaxLength(3).HasDefaultValue("EUR");
             entity.Property(c => c.InvoicePrefix).HasMaxLength(20);
+            entity.Property(c => c.DefaultPaymentMethod).HasMaxLength(50).HasDefaultValue("bank_transfer");
+            entity.Property(c => c.DefaultConstantSymbol).HasMaxLength(10);
+            entity.Property(c => c.DefaultInvoiceNotes).HasMaxLength(2000);
+            entity.Property(c => c.InvoiceFooter).HasMaxLength(2000);
+            entity.Property(c => c.LogoUrl).HasMaxLength(500);
             entity.Property(c => c.Notes).HasMaxLength(2000);
         });
 
