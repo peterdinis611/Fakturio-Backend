@@ -11,8 +11,13 @@ namespace Fakturio.Api.Services;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(
+        this IServiceCollection services,
+        IConfiguration configuration)
     {
+        services.Configure<OverdueSyncOptions>(configuration.GetSection(OverdueSyncOptions.SectionName));
+        services.AddHostedService<OverdueSyncBackgroundService>();
+
         services.AddScoped<IInvoiceNumberService, InvoiceNumberService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoicePdfService, InvoicePdfService>();
