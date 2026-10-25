@@ -107,3 +107,18 @@ GET {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/pdf
 
 ### List invoices
 GET {{host}}/api/invoices?page=1&pageSize=20&overdueOnly=false
+
+### Reports – overview
+GET {{host}}/api/reports/overview?from=2026-01-01&to=2026-12-31
+
+### Reports – monthly revenue
+GET {{host}}/api/reports/revenue/monthly?year=2026
+
+### Reports – aging
+GET {{host}}/api/reports/aging?largestLimit=10
+
+### Reports – top customers
+GET {{host}}/api/reports/customers/top?limit=10&from=2026-01-01&to=2026-12-31
+
+### Reports – VAT summary
+GET {{host}}/api/reports/vat?from=2026-01-01&to=2026-12-31
