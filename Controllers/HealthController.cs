@@ -2,12 +2,12 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
 
-[ApiController]
 [Route("api/health")]
-public class HealthController : ControllerBase
+public sealed class HealthController : ApiControllerBase
 {
     [HttpGet]
-    public IActionResult Get() => Ok(new
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public ActionResult Get() => Ok(new
     {
         status = "ok",
         service = "Fakturio.Api",

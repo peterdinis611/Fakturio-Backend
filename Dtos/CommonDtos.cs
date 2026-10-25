@@ -7,5 +7,3 @@ public record PagedResponse<T>(
     int TotalCount,
     int TotalPages
 );
-
-public record ApiError(string Error, string? Code = null);

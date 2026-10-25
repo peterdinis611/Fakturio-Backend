@@ -1,23 +1,47 @@
 using System.Text.Json.Serialization;
 using Fakturio.Api.Data;
+using Fakturio.Api.Infrastructure;
 using Fakturio.Api.Services;
 using Fakturio.Api.Validation;
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using QuestPDF.Infrastructure;
+
+QuestPDF.Settings.License = LicenseType.Community;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<ValidationFilter>();
+    options.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true;
+})
+.ConfigureApiBehaviorOptions(options =>
+{
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var problem = new ValidationProblemDetails(context.ModelState)
+        {
+            Title = "Validation failed",
+            Status = StatusCodes.Status400BadRequest,
+            Type = $"https://httpstatuses.com/{StatusCodes.Status400BadRequest}",
+            Instance = context.HttpContext.Request.Path,
+            Detail = "One or more validation errors occurred."
+        };
+        problem.Extensions["code"] = "validation_failed";
+        return new BadRequestObjectResult(problem);
+    };
 })
 .AddJsonOptions(options =>
 {
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
 });
 
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerRequestValidator>();
 builder.Services.AddApplicationServices();
 

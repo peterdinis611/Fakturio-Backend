@@ -42,17 +42,14 @@ Content-Type: application/json
   "country": "SK"
 }
 
-### List customers (paged)
-GET {{host}}/api/customers?page=1&pageSize=20&search=ACME
-
-### Create invoice (draft)
+### Create invoice
 # @name createInvoice
 POST {{host}}/api/invoices
 Content-Type: application/json
 
 {
   "customerId": "{{createCustomer.response.body.$.id}}",
-  "status": "Draft",
+  "status": "Issued",
   "items": [
     {
       "description": "Web development – október 2026",
@@ -60,38 +57,53 @@ Content-Type: application/json
       "quantity": 40,
       "unitPrice": 45,
       "vatRate": 23
-    },
-    {
-      "description": "Hosting",
-      "unit": "mes",
-      "quantity": 1,
-      "unitPrice": 15,
-      "vatRate": 23
     }
   ]
 }
 
-### Issue invoice
-PATCH {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/status
+### Mark paid (with date)
+POST {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/pay
 Content-Type: application/json
 
 {
-  "status": "Issued"
+  "paidAt": "2026-10-25"
 }
 
-### Duplicate invoice
-POST {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/duplicate
+### Cancel invoice
+# @name createToCancel
+POST {{host}}/api/invoices
+Content-Type: application/json
+
+{
+  "customerId": "{{createCustomer.response.body.$.id}}",
+  "status": "Issued",
+  "items": [
+    { "description": "To cancel", "quantity": 1, "unitPrice": 10, "vatRate": 23 }
+  ]
+}
+
+###
+POST {{host}}/api/invoices/{{createToCancel.response.body.$.id}}/cancel
+Content-Type: application/json
+
+{
+  "reason": "Chybná faktúra – opravíme a vystavíme znova"
+}
+
+### Stats
+GET {{host}}/api/invoices/stats
+
+### Reminders (due in 7 days + overdue)
+GET {{host}}/api/invoices/reminders?withinDays=7
+
+### Mark reminder sent
+POST {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/reminders/mark-sent
+
+### Sync overdue statuses
+POST {{host}}/api/invoices/sync-overdue
+
+### Download PDF
+GET {{host}}/api/invoices/{{createInvoice.response.body.$.id}}/pdf
 
 ### List invoices
-GET {{host}}/api/invoices?page=1&pageSize=20
-
-### Invalid customer (validation demo)
-POST {{host}}/api/customers
-Content-Type: application/json
-
-{
-  "name": "",
-  "ico": "123",
-  "email": "not-an-email",
-  "postalCode": "ABC"
-}
+GET {{host}}/api/invoices?page=1&pageSize=20&overdueOnly=false

@@ -106,7 +106,7 @@ public static class InvoiceMapper
         i.Currency,
         i.Total,
         IsOverdue(i, today),
-        today.DayNumber - i.DueDate.DayNumber,
+        i.DueDate.DayNumber - today.DayNumber,
         i.ReminderCount,
         i.LastReminderSentAt
     );

@@ -80,11 +80,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(i => i.BankIban).HasMaxLength(34);
             entity.Property(i => i.BankBic).HasMaxLength(11);
             entity.Property(i => i.Notes).HasMaxLength(2000);
+            entity.Property(i => i.CancelReason).HasMaxLength(500);
             entity.Property(i => i.Subtotal).HasPrecision(18, 2);
             entity.Property(i => i.VatTotal).HasPrecision(18, 2);
             entity.Property(i => i.Total).HasPrecision(18, 2);
             entity.HasIndex(i => i.Status);
             entity.HasIndex(i => i.IssueDate);
+            entity.HasIndex(i => i.DueDate);
             entity.HasOne(i => i.Customer)
                 .WithMany(c => c.Invoices)
                 .HasForeignKey(i => i.CustomerId)

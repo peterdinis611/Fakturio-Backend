@@ -157,3 +157,25 @@ public class UpdateInvoiceStatusRequestValidator : AbstractValidator<UpdateInvoi
             .WithMessage("Invalid invoice status.");
     }
 }
+
+public class MarkInvoicePaidRequestValidator : AbstractValidator<MarkInvoicePaidRequest>
+{
+    public MarkInvoicePaidRequestValidator()
+    {
+        RuleFor(x => x.PaidAt)
+            .LessThanOrEqualTo(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
+            .When(x => x.PaidAt.HasValue)
+            .WithMessage("Paid date cannot be too far in the future.");
+    }
+}
+
+public class CancelInvoiceRequestValidator : AbstractValidator<CancelInvoiceRequest>
+{
+    public CancelInvoiceRequestValidator()
+    {
+        RuleFor(x => x.Reason)
+            .NotEmpty().WithMessage("Cancel reason is required.")
+            .MinimumLength(3).WithMessage("Cancel reason must be at least 3 characters.")
+            .MaximumLength(500);
+    }
+}

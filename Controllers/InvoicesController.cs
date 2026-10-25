@@ -1,14 +1,16 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Dtos;
+using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Models;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
 
-[ApiController]
 [Route("api/invoices")]
-[Produces("application/json")]
-public class InvoicesController(IInvoiceService invoices) : ControllerBase
+public sealed class InvoicesController(
+    IInvoiceService invoices,
+    IInvoicePdfService pdfs) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<InvoiceListItemResponse>), StatusCodes.Status200OK)]
@@ -20,100 +22,115 @@ public class InvoicesController(IInvoiceService invoices) : ControllerBase
         [FromQuery] string? search = null,
         [FromQuery] DateOnly? issueFrom = null,
         [FromQuery] DateOnly? issueTo = null,
+        [FromQuery] bool? overdueOnly = null,
         CancellationToken ct = default)
-    {
-        var query = new InvoiceListQuery(page, pageSize, status, customerId, search, issueFrom, issueTo);
-        return Ok(await invoices.ListAsync(query, ct));
-    }
+        => Ok(await invoices.ListAsync(
+            new InvoiceListQuery(page, pageSize, status, customerId, search, issueFrom, issueTo, overdueOnly),
+            ct));
+
+    [HttpGet("stats")]
+    [ProducesResponseType(typeof(InvoiceStatsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<InvoiceStatsResponse>> Stats(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        CancellationToken ct = default)
+        => Ok(await invoices.GetStatsAsync(from, to, ct));
+
+    [HttpGet("reminders")]
+    [ProducesResponseType(typeof(IReadOnlyList<InvoiceReminderItemResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<InvoiceReminderItemResponse>>> Reminders(
+        [FromQuery] int withinDays = 7,
+        [FromQuery] bool onlyOverdue = false,
+        CancellationToken ct = default)
+        => Ok(await invoices.GetRemindersAsync(withinDays, onlyOverdue, ct));
+
+    [HttpPost("sync-overdue")]
+    [ProducesResponseType(typeof(SyncOverdueResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<SyncOverdueResponse>> SyncOverdue(CancellationToken ct)
+        => Ok(await invoices.SyncOverdueAsync(ct));
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<InvoiceResponse>> Get(Guid id, CancellationToken ct)
-    {
-        var invoice = await invoices.GetByIdAsync(id, ct);
-        return invoice is null ? NotFound(new ApiError("Invoice not found.")) : Ok(invoice);
-    }
+        => OkOrNotFound(
+            await invoices.GetByIdAsync(id, ct),
+            "Invoice not found.",
+            ErrorCodes.InvoiceNotFound);
 
     [HttpGet("by-number/{number}")]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<InvoiceResponse>> GetByNumber(string number, CancellationToken ct)
-    {
-        var invoice = await invoices.GetByNumberAsync(number, ct);
-        return invoice is null ? NotFound(new ApiError("Invoice not found.")) : Ok(invoice);
-    }
+        => OkOrNotFound(
+            await invoices.GetByNumberAsync(number, ct),
+            "Invoice not found.",
+            ErrorCodes.InvoiceNotFound);
+
+    [HttpGet("{id:guid}/pdf")]
+    [Produces("application/pdf")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<ActionResult> DownloadPdf(Guid id, CancellationToken ct)
+        => (await pdfs.GenerateAsync(id, ct)).ToFileResult(this);
 
     [HttpPost]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<InvoiceResponse>> Create(
         [FromBody] CreateInvoiceRequest request,
         CancellationToken ct)
     {
         var result = await invoices.CreateAsync(request, ct);
-        if (!result.Success)
-            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
-
-        return CreatedAtAction(nameof(Get), new { id = result.Data!.Id }, result.Data);
+        return result.ToActionResult(this, nameof(Get), i => new { id = i.Id });
     }
 
     [HttpPut("{id:guid}")]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<InvoiceResponse>> Update(
         Guid id,
         [FromBody] UpdateInvoiceRequest request,
         CancellationToken ct)
-    {
-        var result = await invoices.UpdateAsync(id, request, ct);
-        if (!result.Success)
-            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
-
-        return Ok(result.Data);
-    }
+        => (await invoices.UpdateAsync(id, request, ct)).ToActionResult(this);
 
     [HttpPatch("{id:guid}/status")]
     [ProducesResponseType(typeof(InvoiceStatusResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<InvoiceStatusResponse>> UpdateStatus(
         Guid id,
         [FromBody] UpdateInvoiceStatusRequest request,
         CancellationToken ct)
-    {
-        var result = await invoices.UpdateStatusAsync(id, request, ct);
-        if (!result.Success)
-            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
+        => (await invoices.UpdateStatusAsync(id, request, ct)).ToActionResult(this);
 
-        return Ok(result.Data);
-    }
+    [HttpPost("{id:guid}/pay")]
+    [ProducesResponseType(typeof(InvoiceStatusResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<InvoiceStatusResponse>> MarkPaid(
+        Guid id,
+        [FromBody] MarkInvoicePaidRequest? request,
+        CancellationToken ct)
+        => (await invoices.MarkPaidAsync(id, request ?? new MarkInvoicePaidRequest(null), ct))
+            .ToActionResult(this);
+
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType(typeof(InvoiceStatusResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<InvoiceStatusResponse>> Cancel(
+        Guid id,
+        [FromBody] CancelInvoiceRequest request,
+        CancellationToken ct)
+        => (await invoices.CancelAsync(id, request, ct)).ToActionResult(this);
+
+    [HttpPost("{id:guid}/reminders/mark-sent")]
+    [ProducesResponseType(typeof(InvoiceReminderItemResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<InvoiceReminderItemResponse>> MarkReminderSent(
+        Guid id,
+        CancellationToken ct)
+        => (await invoices.MarkReminderSentAsync(id, ct)).ToActionResult(this);
 
     [HttpPost("{id:guid}/duplicate")]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status201Created)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<InvoiceResponse>> Duplicate(Guid id, CancellationToken ct)
     {
         var result = await invoices.DuplicateAsync(id, ct);
-        if (!result.Success)
-            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
-
-        return CreatedAtAction(nameof(Get), new { id = result.Data!.Id }, result.Data);
+        return result.ToActionResult(this, nameof(Get), i => new { id = i.Id });
     }
 
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    [ProducesResponseType(StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
-    {
-        var result = await invoices.DeleteAsync(id, ct);
-        if (!result.Success)
-            return StatusCode(result.StatusCode, new ApiError(result.Error!, result.ErrorCode));
-
-        return NoContent();
-    }
+    public async Task<ActionResult> Delete(Guid id, CancellationToken ct)
+        => (await invoices.DeleteAsync(id, ct)).ToActionResult(this);
 }

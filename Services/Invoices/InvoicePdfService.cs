@@ -1,3 +1,4 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Models;
@@ -21,7 +22,7 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
             .FirstOrDefaultAsync(i => i.Id == invoiceId, ct);
 
         if (invoice is null)
-            return ServiceResult<InvoicePdfFile>.NotFound("Invoice not found.");
+            return ServiceResult<InvoicePdfFile>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
         var bytes = Document.Create(container =>
         {

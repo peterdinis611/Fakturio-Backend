@@ -4,25 +4,18 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
 
-[ApiController]
 [Route("api/company")]
-[Produces("application/json")]
-public class CompanyController(ICompanyService company) : ControllerBase
+public sealed class CompanyController(ICompanyService company) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanySettingsResponse>> Get(CancellationToken ct)
-    {
-        return Ok(await company.GetAsync(ct));
-    }
+        => Ok(await company.GetAsync(ct));
 
     [HttpPut]
     [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<CompanySettingsResponse>> Update(
         [FromBody] UpdateCompanySettingsRequest request,
         CancellationToken ct)
-    {
-        return Ok(await company.UpdateAsync(request, ct));
-    }
+        => Ok(await company.UpdateAsync(request, ct));
 }

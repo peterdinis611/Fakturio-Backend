@@ -1,3 +1,4 @@
+using Fakturio.Api.Common;
 using FluentValidation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -25,15 +26,20 @@ public sealed class ValidationFilter(IServiceProvider services) : IAsyncActionFi
             var errors = result.Errors
                 .GroupBy(e => e.PropertyName)
                 .ToDictionary(
-                    g => g.Key,
+                    g => string.IsNullOrWhiteSpace(g.Key) ? "_" : g.Key,
                     g => g.Select(e => e.ErrorMessage).Distinct().ToArray());
 
-            context.Result = new BadRequestObjectResult(new ValidationProblemDetails(errors)
+            var problem = new ValidationProblemDetails(errors)
             {
                 Title = "Validation failed",
                 Status = StatusCodes.Status400BadRequest,
-                Instance = context.HttpContext.Request.Path
-            });
+                Type = $"https://httpstatuses.com/{StatusCodes.Status400BadRequest}",
+                Instance = context.HttpContext.Request.Path,
+                Detail = "One or more validation errors occurred."
+            };
+            problem.Extensions["code"] = ErrorCodes.Validation;
+
+            context.Result = new BadRequestObjectResult(problem);
             return;
         }
 

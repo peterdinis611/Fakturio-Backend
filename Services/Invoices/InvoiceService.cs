@@ -1,3 +1,4 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
@@ -16,6 +17,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
     {
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         var invoices = db.Invoices.AsNoTracking().AsQueryable();
 
@@ -30,6 +32,14 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
 
         if (query.IssueTo.HasValue)
             invoices = invoices.Where(i => i.IssueDate <= query.IssueTo.Value);
+
+        if (query.OverdueOnly == true)
+        {
+            invoices = invoices.Where(i =>
+                (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
+                && i.DueDate < today
+                && i.PaidAt == null);
+        }
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -49,7 +59,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
             .ToListAsync(ct);
 
         return new PagedResponse<InvoiceListItemResponse>(
-            items.Select(InvoiceMapper.ToListItem).ToList(),
+            items.Select(i => InvoiceMapper.ToListItem(i, today)).ToList(),
             page,
             pageSize,
             totalCount,
@@ -85,7 +95,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
     {
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
-            return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", "customer_not_found");
+            return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
 
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
@@ -138,16 +148,16 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
         if (invoice is null)
-            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.");
+            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
         if (invoice.Status is not InvoiceStatus.Draft)
             return ServiceResult<InvoiceResponse>.Conflict(
                 "Only draft invoices can be fully updated.",
-                "not_draft");
+                ErrorCodes.NotDraft);
 
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
-            return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", "customer_not_found");
+            return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
 
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
 
@@ -180,30 +190,98 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
     {
         var invoice = await db.Invoices.FindAsync([id], ct);
         if (invoice is null)
-            return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.");
+            return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
         if (invoice.Status == InvoiceStatus.Cancelled && request.Status != InvoiceStatus.Cancelled)
             return ServiceResult<InvoiceStatusResponse>.Conflict(
-                "Cancelled invoices cannot change status.",
-                "cancelled");
+                "Cancelled invoices cannot change status. Use dedicated cancel/pay endpoints for lifecycle changes.",
+                ErrorCodes.Cancelled);
+
+        if (request.Status == InvoiceStatus.Paid)
+            return await MarkPaidAsync(id, new MarkInvoicePaidRequest(null), ct);
+
+        if (request.Status == InvoiceStatus.Cancelled)
+            return ServiceResult<InvoiceStatusResponse>.BadRequest(
+                "Use POST /api/invoices/{id}/cancel with a reason.",
+                ErrorCodes.UseCancelEndpoint);
 
         if (invoice.Status == InvoiceStatus.Paid && request.Status is InvoiceStatus.Draft)
             return ServiceResult<InvoiceStatusResponse>.Conflict(
                 "Paid invoices cannot return to draft.",
-                "paid_to_draft");
+                ErrorCodes.PaidToDraft);
 
         invoice.Status = request.Status;
         invoice.UpdatedAt = DateTime.UtcNow;
 
-        if (request.Status == InvoiceStatus.Paid)
-            invoice.PaidAt ??= DateOnly.FromDateTime(DateTime.UtcNow);
-        else if (request.Status != InvoiceStatus.Paid)
+        if (request.Status != InvoiceStatus.Paid)
             invoice.PaidAt = null;
 
         await db.SaveChangesAsync(ct);
+        return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
+    }
 
-        return ServiceResult<InvoiceStatusResponse>.Ok(
-            new InvoiceStatusResponse(invoice.Id, invoice.Number, invoice.Status, invoice.PaidAt));
+    public async Task<ServiceResult<InvoiceStatusResponse>> MarkPaidAsync(
+        Guid id,
+        MarkInvoicePaidRequest request,
+        CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.FindAsync([id], ct);
+        if (invoice is null)
+            return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (invoice.Status is InvoiceStatus.Cancelled)
+            return ServiceResult<InvoiceStatusResponse>.Conflict(
+                "Cancelled invoices cannot be marked as paid.",
+                ErrorCodes.Cancelled);
+
+        if (invoice.Status is InvoiceStatus.Draft)
+            return ServiceResult<InvoiceStatusResponse>.Conflict(
+                "Draft invoices must be issued before payment.",
+                ErrorCodes.Draft);
+
+        var paidAt = request.PaidAt ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        if (paidAt < invoice.IssueDate)
+            return ServiceResult<InvoiceStatusResponse>.BadRequest(
+                "Paid date cannot be before issue date.",
+                ErrorCodes.InvalidPaidAt);
+
+        invoice.Status = InvoiceStatus.Paid;
+        invoice.PaidAt = paidAt;
+        invoice.CancelReason = null;
+        invoice.CancelledAt = null;
+        invoice.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
+    }
+
+    public async Task<ServiceResult<InvoiceStatusResponse>> CancelAsync(
+        Guid id,
+        CancelInvoiceRequest request,
+        CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.FindAsync([id], ct);
+        if (invoice is null)
+            return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (invoice.Status is InvoiceStatus.Paid)
+            return ServiceResult<InvoiceStatusResponse>.Conflict(
+                "Paid invoices cannot be cancelled.",
+                ErrorCodes.Paid);
+
+        if (invoice.Status is InvoiceStatus.Cancelled)
+            return ServiceResult<InvoiceStatusResponse>.Conflict(
+                "Invoice is already cancelled.",
+                ErrorCodes.AlreadyCancelled);
+
+        invoice.Status = InvoiceStatus.Cancelled;
+        invoice.CancelReason = request.Reason.Trim();
+        invoice.CancelledAt = DateOnly.FromDateTime(DateTime.UtcNow);
+        invoice.PaidAt = null;
+        invoice.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
     public async Task<ServiceResult<InvoiceResponse>> DuplicateAsync(
@@ -216,7 +294,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
             .FirstOrDefaultAsync(i => i.Id == id, ct);
 
         if (source is null)
-            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.");
+            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
         var issueDate = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -282,16 +360,131 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
     {
         var invoice = await db.Invoices.FindAsync([id], ct);
         if (invoice is null)
-            return ServiceResult.NotFound("Invoice not found.");
+            return ServiceResult.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
         if (invoice.Status is not InvoiceStatus.Draft)
             return ServiceResult.Conflict(
                 "Only draft invoices can be deleted. Cancel issued invoices instead.",
-                "not_draft");
+                ErrorCodes.NotDraft);
 
         db.Invoices.Remove(invoice);
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok(StatusCodes.Status204NoContent);
+    }
+
+    public async Task<InvoiceStatsResponse> GetStatsAsync(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var query = db.Invoices.AsNoTracking().AsQueryable();
+
+        if (from.HasValue)
+            query = query.Where(i => i.IssueDate >= from.Value);
+        if (to.HasValue)
+            query = query.Where(i => i.IssueDate <= to.Value);
+
+        var invoices = await query.ToListAsync(ct);
+
+        var draft = invoices.Count(i => i.Status == InvoiceStatus.Draft);
+        var issued = invoices.Count(i => i.Status == InvoiceStatus.Issued);
+        var paid = invoices.Count(i => i.Status == InvoiceStatus.Paid);
+        var cancelled = invoices.Count(i => i.Status == InvoiceStatus.Cancelled);
+        var overdue = invoices.Count(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue);
+
+        var paidAmount = invoices.Where(i => i.Status == InvoiceStatus.Paid).Sum(i => i.Total);
+        var outstanding = invoices
+            .Where(i => i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue)
+            .Sum(i => i.Total);
+        var overdueAmount = invoices
+            .Where(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue)
+            .Sum(i => i.Total);
+
+        return new InvoiceStatsResponse(
+            from,
+            to,
+            invoices.Count,
+            draft,
+            issued,
+            paid,
+            overdue,
+            cancelled,
+            invoices.Where(i => i.Status != InvoiceStatus.Cancelled).Sum(i => i.Total),
+            paidAmount,
+            outstanding,
+            overdueAmount,
+            "EUR");
+    }
+
+    public async Task<IReadOnlyList<InvoiceReminderItemResponse>> GetRemindersAsync(
+        int withinDays,
+        bool onlyOverdue,
+        CancellationToken ct = default)
+    {
+        withinDays = Math.Clamp(withinDays, 0, 90);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var until = today.AddDays(withinDays);
+
+        var query = db.Invoices
+            .AsNoTracking()
+            .Where(i =>
+                (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
+                && i.PaidAt == null);
+
+        if (onlyOverdue)
+            query = query.Where(i => i.DueDate < today);
+        else
+            query = query.Where(i => i.DueDate <= until);
+
+        var items = await query
+            .OrderBy(i => i.DueDate)
+            .ThenBy(i => i.Number)
+            .ToListAsync(ct);
+
+        return items.Select(i => InvoiceMapper.ToReminderItem(i, today)).ToList();
+    }
+
+    public async Task<ServiceResult<InvoiceReminderItemResponse>> MarkReminderSentAsync(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.FindAsync([id], ct);
+        if (invoice is null)
+            return ServiceResult<InvoiceReminderItemResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (invoice.Status is not (InvoiceStatus.Issued or InvoiceStatus.Overdue))
+            return ServiceResult<InvoiceReminderItemResponse>.Conflict(
+                "Reminders can only be sent for issued or overdue invoices.",
+                ErrorCodes.InvalidStatus);
+
+        invoice.LastReminderSentAt = DateTime.UtcNow;
+        invoice.ReminderCount += 1;
+        invoice.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return ServiceResult<InvoiceReminderItemResponse>.Ok(
+            InvoiceMapper.ToReminderItem(invoice, today));
+    }
+
+    public async Task<SyncOverdueResponse> SyncOverdueAsync(CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var overdue = await db.Invoices
+            .Where(i => i.Status == InvoiceStatus.Issued && i.DueDate < today && i.PaidAt == null)
+            .ToListAsync(ct);
+
+        foreach (var invoice in overdue)
+        {
+            invoice.Status = InvoiceStatus.Overdue;
+            invoice.UpdatedAt = DateTime.UtcNow;
+        }
+
+        if (overdue.Count > 0)
+            await db.SaveChangesAsync(ct);
+
+        return new SyncOverdueResponse(overdue.Count);
     }
 
     private static string DigitsOnly(string value) =>

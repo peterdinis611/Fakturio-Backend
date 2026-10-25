@@ -1,3 +1,4 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
@@ -73,7 +74,7 @@ public class CustomerService(AppDbContext db) : ICustomerService
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",
-                    "duplicate_ico");
+                    ErrorCodes.DuplicateIco);
         }
 
         var customer = new Customer();
@@ -91,7 +92,7 @@ public class CustomerService(AppDbContext db) : ICustomerService
     {
         var customer = await db.Customers.FindAsync([id], ct);
         if (customer is null)
-            return ServiceResult<CustomerResponse>.NotFound("Customer not found.");
+            return ServiceResult<CustomerResponse>.NotFound("Customer not found.", ErrorCodes.NotFound);
 
         if (!string.IsNullOrWhiteSpace(request.Ico))
         {
@@ -100,7 +101,7 @@ public class CustomerService(AppDbContext db) : ICustomerService
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",
-                    "duplicate_ico");
+                    ErrorCodes.DuplicateIco);
         }
 
         CustomerMapper.Apply(customer, request);
@@ -114,13 +115,13 @@ public class CustomerService(AppDbContext db) : ICustomerService
     {
         var customer = await db.Customers.FindAsync([id], ct);
         if (customer is null)
-            return ServiceResult.NotFound("Customer not found.");
+            return ServiceResult.NotFound("Customer not found.", ErrorCodes.NotFound);
 
         var hasInvoices = await db.Invoices.AnyAsync(i => i.CustomerId == id, ct);
         if (hasInvoices)
             return ServiceResult.Conflict(
                 "Customer has invoices and cannot be deleted.",
-                "has_invoices");
+                ErrorCodes.HasInvoices);
 
         db.Customers.Remove(customer);
         await db.SaveChangesAsync(ct);

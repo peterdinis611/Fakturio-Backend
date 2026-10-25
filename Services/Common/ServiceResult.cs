@@ -1,3 +1,5 @@
+using Fakturio.Api.Common;
+
 namespace Fakturio.Api.Services.Common;
 
 public class ServiceResult
@@ -21,13 +23,13 @@ public class ServiceResult
         StatusCode = statusCode
     };
 
-    public static ServiceResult NotFound(string error = "Not found.") =>
-        Fail(error, StatusCodes.Status404NotFound, "not_found");
+    public static ServiceResult NotFound(string error = "Not found.", string code = ErrorCodes.NotFound) =>
+        Fail(error, StatusCodes.Status404NotFound, code);
 
-    public static ServiceResult Conflict(string error, string? errorCode = "conflict") =>
+    public static ServiceResult Conflict(string error, string errorCode = ErrorCodes.Conflict) =>
         Fail(error, StatusCodes.Status409Conflict, errorCode);
 
-    public static ServiceResult BadRequest(string error, string? errorCode = "bad_request") =>
+    public static ServiceResult BadRequest(string error, string errorCode = ErrorCodes.BadRequest) =>
         Fail(error, StatusCodes.Status400BadRequest, errorCode);
 }
 
@@ -52,12 +54,12 @@ public class ServiceResult<T> : ServiceResult
         StatusCode = statusCode
     };
 
-    public new static ServiceResult<T> NotFound(string error = "Not found.") =>
-        Fail(error, StatusCodes.Status404NotFound, "not_found");
+    public new static ServiceResult<T> NotFound(string error = "Not found.", string code = ErrorCodes.NotFound) =>
+        Fail(error, StatusCodes.Status404NotFound, code);
 
-    public new static ServiceResult<T> Conflict(string error, string? errorCode = "conflict") =>
+    public new static ServiceResult<T> Conflict(string error, string errorCode = ErrorCodes.Conflict) =>
         Fail(error, StatusCodes.Status409Conflict, errorCode);
 
-    public new static ServiceResult<T> BadRequest(string error, string? errorCode = "bad_request") =>
+    public new static ServiceResult<T> BadRequest(string error, string errorCode = ErrorCodes.BadRequest) =>
         Fail(error, StatusCodes.Status400BadRequest, errorCode);
 }

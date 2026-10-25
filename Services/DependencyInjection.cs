@@ -11,6 +11,7 @@ public static class DependencyInjection
     {
         services.AddScoped<IInvoiceNumberService, InvoiceNumberService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
+        services.AddScoped<IInvoicePdfService, InvoicePdfService>();
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<ICompanyService, CompanyService>();
         return services;
