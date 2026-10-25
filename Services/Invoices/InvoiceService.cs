@@ -1,3 +1,4 @@
+using Fakturio.Api.Caching;
 using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
@@ -9,7 +10,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Invoices;
 
-public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : IInvoiceService
+public class InvoiceService(
+    AppDbContext db,
+    IInvoiceNumberService numbers,
+    ICacheInvalidator cache) : IInvoiceService
 {
     public async Task<PagedResponse<InvoiceListItemResponse>> ListAsync(
         InvoiceListQuery query,
@@ -133,7 +137,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         InvoiceCalculator.RecalculateTotals(invoice);
 
         db.Invoices.Add(invoice);
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
 
         return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(invoice));
     }
@@ -179,7 +183,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         InvoiceMapper.ReplaceItems(invoice, request.Items, company?.DefaultVatRate ?? 23m);
         InvoiceCalculator.RecalculateTotals(invoice);
 
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
         return ServiceResult<InvoiceResponse>.Ok(InvoiceMapper.ToResponse(invoice));
     }
 
@@ -216,7 +220,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         if (request.Status != InvoiceStatus.Paid)
             invoice.PaidAt = null;
 
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
         return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
@@ -251,7 +255,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         invoice.CancelledAt = null;
         invoice.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
         return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
@@ -280,7 +284,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         invoice.PaidAt = null;
         invoice.UpdatedAt = DateTime.UtcNow;
 
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
         return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
@@ -351,7 +355,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
 
         InvoiceCalculator.RecalculateTotals(clone);
         db.Invoices.Add(clone);
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
 
         return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(clone));
     }
@@ -368,7 +372,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
                 ErrorCodes.NotDraft);
 
         db.Invoices.Remove(invoice);
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
         return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 
@@ -461,7 +465,7 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         invoice.LastReminderSentAt = DateTime.UtcNow;
         invoice.ReminderCount += 1;
         invoice.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         return ServiceResult<InvoiceReminderItemResponse>.Ok(
@@ -482,9 +486,15 @@ public class InvoiceService(AppDbContext db, IInvoiceNumberService numbers) : II
         }
 
         if (overdue.Count > 0)
-            await db.SaveChangesAsync(ct);
+            await SaveAndInvalidateAsync(ct);
 
         return new SyncOverdueResponse(overdue.Count);
+    }
+
+    private async Task SaveAndInvalidateAsync(CancellationToken ct)
+    {
+        await db.SaveChangesAsync(ct);
+        await cache.InvalidateReportsAsync(ct);
     }
 
     private static string DigitsOnly(string value) =>

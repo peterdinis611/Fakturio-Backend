@@ -1,3 +1,4 @@
+using Fakturio.Api.Caching;
 using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
@@ -9,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Customers;
 
-public class CustomerService(AppDbContext db) : ICustomerService
+public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustomerService
 {
     public async Task<PagedResponse<CustomerResponse>> ListAsync(
         int page,
@@ -80,7 +81,7 @@ public class CustomerService(AppDbContext db) : ICustomerService
         var customer = new Customer();
         CustomerMapper.Apply(customer, request);
         db.Customers.Add(customer);
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
 
         return ServiceResult<CustomerResponse>.Created(CustomerMapper.ToResponse(customer));
     }
@@ -105,7 +106,7 @@ public class CustomerService(AppDbContext db) : ICustomerService
         }
 
         CustomerMapper.Apply(customer, request);
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
 
         var invoiceCount = await db.Invoices.CountAsync(i => i.CustomerId == id, ct);
         return ServiceResult<CustomerResponse>.Ok(CustomerMapper.ToResponse(customer, invoiceCount));
@@ -124,7 +125,13 @@ public class CustomerService(AppDbContext db) : ICustomerService
                 ErrorCodes.HasInvoices);
 
         db.Customers.Remove(customer);
-        await db.SaveChangesAsync(ct);
+        await SaveAndInvalidateAsync(ct);
         return ServiceResult.Ok(StatusCodes.Status204NoContent);
+    }
+
+    private async Task SaveAndInvalidateAsync(CancellationToken ct)
+    {
+        await db.SaveChangesAsync(ct);
+        await cache.InvalidateReportsAsync(ct);
     }
 }

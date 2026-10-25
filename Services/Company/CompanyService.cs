@@ -1,3 +1,4 @@
+using Fakturio.Api.Caching;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
@@ -7,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Company;
 
-public class CompanyService(AppDbContext db) : ICompanyService
+public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompanyService
 {
     public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
@@ -22,6 +23,8 @@ public class CompanyService(AppDbContext db) : ICompanyService
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.Apply(company, request);
         await db.SaveChangesAsync(ct);
+        await cache.InvalidateCompanyAsync(ct);
+        await cache.InvalidateReportsAsync(ct);
         return CompanyMapper.ToResponse(company);
     }
 

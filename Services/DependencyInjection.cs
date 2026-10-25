@@ -1,3 +1,5 @@
+using Fakturio.Api.Caching;
+using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Services.Company;
 using Fakturio.Api.Services.Customers;
@@ -14,8 +16,24 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoicePdfService, InvoicePdfService>();
         services.AddScoped<ICustomerService, CustomerService>();
-        services.AddScoped<ICompanyService, CompanyService>();
-        services.AddScoped<IReportService, ReportService>();
+
+        services.AddScoped<CompanyService>();
+        services.AddScoped<ICompanyService, CachingCompanyService>();
+
+        services.AddScoped<ReportService>();
+        services.AddScoped<IReportService, CachingReportService>();
+
+        services.AddScoped<ICacheInvalidator, CacheInvalidator>();
+
+        return services;
+    }
+
+    public static IServiceCollection AddApplicationCaching(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.Configure<CacheOptions>(configuration.GetSection(CacheOptions.SectionName));
+        services.AddHybridCache();
         return services;
     }
 }

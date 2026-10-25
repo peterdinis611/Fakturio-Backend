@@ -43,6 +43,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerRequestValidator>();
+builder.Services.AddApplicationCaching(builder.Configuration);
 builder.Services.AddApplicationServices();
 
 builder.Services.AddCors(options =>
