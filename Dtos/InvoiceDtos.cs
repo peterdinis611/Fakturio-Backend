@@ -1,0 +1,118 @@
+using Fakturio.Api.Models;
+
+namespace Fakturio.Api.Dtos;
+
+public record CreateInvoiceItemRequest(
+    string Description,
+    string? Unit,
+    decimal Quantity,
+    decimal UnitPrice,
+    decimal? VatRate
+);
+
+public record CreateInvoiceRequest(
+    Guid CustomerId,
+    DateOnly? IssueDate,
+    DateOnly? DueDate,
+    DateOnly? DeliveryDate,
+    string? Currency,
+    string? VariableSymbol,
+    string? ConstantSymbol,
+    string? SpecificSymbol,
+    string? PaymentMethod,
+    string? BankIban,
+    string? BankBic,
+    string? Notes,
+    InvoiceStatus? Status,
+    IReadOnlyList<CreateInvoiceItemRequest> Items
+);
+
+public record UpdateInvoiceRequest(
+    Guid CustomerId,
+    DateOnly IssueDate,
+    DateOnly DueDate,
+    DateOnly? DeliveryDate,
+    string? Currency,
+    string? VariableSymbol,
+    string? ConstantSymbol,
+    string? SpecificSymbol,
+    string? PaymentMethod,
+    string? BankIban,
+    string? BankBic,
+    string? Notes,
+    IReadOnlyList<CreateInvoiceItemRequest> Items
+);
+
+public record UpdateInvoiceStatusRequest(InvoiceStatus Status);
+
+public record InvoiceItemResponse(
+    Guid Id,
+    string Description,
+    string Unit,
+    decimal Quantity,
+    decimal UnitPrice,
+    decimal VatRate,
+    decimal Subtotal,
+    decimal VatAmount,
+    decimal Total,
+    int SortOrder
+);
+
+public record InvoiceListItemResponse(
+    Guid Id,
+    string Number,
+    InvoiceStatus Status,
+    Guid CustomerId,
+    string CustomerName,
+    DateOnly IssueDate,
+    DateOnly DueDate,
+    string Currency,
+    decimal Total,
+    DateTime CreatedAt
+);
+
+public record InvoicePartyResponse(
+    string Name,
+    string? Ico,
+    string? Dic,
+    string? IcDph,
+    string? Email,
+    string? Street,
+    string? City,
+    string? PostalCode,
+    string? Country
+);
+
+public record InvoiceResponse(
+    Guid Id,
+    string Number,
+    InvoiceStatus Status,
+    Guid CustomerId,
+    InvoicePartyResponse Customer,
+    InvoicePartyResponse? Seller,
+    DateOnly IssueDate,
+    DateOnly DueDate,
+    DateOnly? DeliveryDate,
+    DateOnly? PaidAt,
+    string Currency,
+    string? VariableSymbol,
+    string? ConstantSymbol,
+    string? SpecificSymbol,
+    string? PaymentMethod,
+    string? BankIban,
+    string? BankBic,
+    string? Notes,
+    decimal Subtotal,
+    decimal VatTotal,
+    decimal Total,
+    DateTime CreatedAt,
+    DateTime UpdatedAt,
+    IReadOnlyList<InvoiceItemResponse> Items
+);
+
+public record InvoiceStatusResponse(
+    Guid Id,
+    string Number,
+    InvoiceStatus Status,
+    DateOnly? PaidAt
+);

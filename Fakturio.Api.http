@@ -1,0 +1,57 @@
+@host = http://localhost:5148
+
+### Health
+GET {{host}}/api/health
+
+### Create customer
+# @name createCustomer
+POST {{host}}/api/customers
+Content-Type: application/json
+
+{
+  "name": "ACME s.r.o.",
+  "ico": "12345678",
+  "dic": "2123456789",
+  "icDph": "SK2123456789",
+  "email": "faktury@acme.sk",
+  "street": "Hlavná 1",
+  "city": "Bratislava",
+  "postalCode": "81101",
+  "country": "SK"
+}
+
+### List customers
+GET {{host}}/api/customers
+
+### Create invoice
+@customerId = {{createCustomer.response.body.$.id}}
+POST {{host}}/api/invoices
+Content-Type: application/json
+
+{
+  "customerId": "{{customerId}}",
+  "issueDate": "2026-10-25",
+  "dueDate": "2026-11-08",
+  "currency": "EUR",
+  "bankIban": "SK3112000000198742637541",
+  "notes": "Ďakujeme za spoluprácu.",
+  "items": [
+    {
+      "description": "Web development – október 2026",
+      "unit": "hod",
+      "quantity": 40,
+      "unitPrice": 45,
+      "vatRate": 23
+    },
+    {
+      "description": "Hosting",
+      "unit": "mes",
+      "quantity": 1,
+      "unitPrice": 15,
+      "vatRate": 23
+    }
+  ]
+}
+
+### List invoices
+GET {{host}}/api/invoices
