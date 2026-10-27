@@ -1,7 +1,5 @@
-using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Jobs;
-using Microsoft.Extensions.Options;
 
 namespace Fakturio.Api.Services.Invoices;
 
@@ -10,14 +8,14 @@ namespace Fakturio.Api.Services.Invoices;
 /// </summary>
 public sealed class OverdueSyncBackgroundService(
     IServiceScopeFactory scopeFactory,
-    IOptionsMonitor<OverdueSyncOptions> optionsMonitor,
+    IJobSettingsStore jobSettings,
     ILogger<OverdueSyncBackgroundService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Overdue sync background service started.");
 
-        var options = optionsMonitor.CurrentValue;
+        var options = jobSettings.GetOverdue();
         if (options.RunOnStartup && options.Enabled)
         {
             try
@@ -35,7 +33,7 @@ public sealed class OverdueSyncBackgroundService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            options = optionsMonitor.CurrentValue;
+            options = jobSettings.GetOverdue();
             if (!options.Enabled)
             {
                 var recheck = Math.Max(1, options.DisabledRecheckHours);
@@ -57,7 +55,7 @@ public sealed class OverdueSyncBackgroundService(
             if (!await JobSchedule.DelaySafe(delay, stoppingToken))
                 return;
 
-            if (!optionsMonitor.CurrentValue.Enabled)
+            if (!jobSettings.GetOverdue().Enabled)
                 continue;
 
             await RunSyncAsync(stoppingToken);

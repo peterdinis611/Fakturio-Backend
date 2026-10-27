@@ -1,7 +1,5 @@
-using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Jobs;
-using Microsoft.Extensions.Options;
 
 namespace Fakturio.Api.Services.Reminders;
 
@@ -11,14 +9,14 @@ namespace Fakturio.Api.Services.Reminders;
 /// </summary>
 public sealed class ReminderBackgroundService(
     IServiceScopeFactory scopeFactory,
-    IOptionsMonitor<ReminderJobOptions> optionsMonitor,
+    IJobSettingsStore jobSettings,
     ILogger<ReminderBackgroundService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         logger.LogInformation("Reminder job background service started.");
 
-        var options = optionsMonitor.CurrentValue;
+        var options = jobSettings.GetReminder();
         if (options.RunOnStartup && options.Enabled)
         {
             try
@@ -36,7 +34,7 @@ public sealed class ReminderBackgroundService(
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            options = optionsMonitor.CurrentValue;
+            options = jobSettings.GetReminder();
             if (!options.Enabled)
             {
                 var recheck = Math.Max(1, options.DisabledRecheckHours);
@@ -58,7 +56,7 @@ public sealed class ReminderBackgroundService(
             if (!await JobSchedule.DelaySafe(delay, stoppingToken))
                 return;
 
-            if (!optionsMonitor.CurrentValue.Enabled)
+            if (!jobSettings.GetReminder().Enabled)
                 continue;
 
             await RunAsync(stoppingToken);
@@ -69,7 +67,7 @@ public sealed class ReminderBackgroundService(
     {
         try
         {
-            var options = optionsMonitor.CurrentValue;
+            var options = jobSettings.GetReminder();
             await using var scope = scopeFactory.CreateAsyncScope();
             var invoices = scope.ServiceProvider.GetRequiredService<IInvoiceService>();
             var notifier = scope.ServiceProvider.GetRequiredService<IReminderNotifier>();
