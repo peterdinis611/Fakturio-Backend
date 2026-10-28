@@ -46,13 +46,14 @@ public static class InvoiceMapper
                     i.SellerName,
                     i.SellerIco,
                     i.SellerDic,
-                    i.SellerIcDph,
+                    i.SellerIsVatPayer ? i.SellerIcDph : null,
                     null,
                     i.SellerStreet,
                     i.SellerCity,
                     i.SellerPostalCode,
                     i.SellerCountry
                 ),
+            i.SellerIsVatPayer,
             i.IssueDate,
             i.DueDate,
             i.DeliveryDate,
@@ -155,7 +156,8 @@ public static class InvoiceMapper
         invoice.SellerName = company.Name;
         invoice.SellerIco = company.Ico;
         invoice.SellerDic = company.Dic;
-        invoice.SellerIcDph = company.IcDph;
+        invoice.SellerIsVatPayer = company.IsVatPayer;
+        invoice.SellerIcDph = company.IsVatPayer ? company.IcDph : null;
         invoice.SellerStreet = company.Street;
         invoice.SellerCity = company.City;
         invoice.SellerPostalCode = company.PostalCode;
@@ -165,7 +167,8 @@ public static class InvoiceMapper
     public static void ReplaceItems(
         Invoice invoice,
         IReadOnlyList<CreateInvoiceItemRequest> items,
-        decimal defaultVatRate)
+        decimal defaultVatRate,
+        bool forceZeroVat = false)
     {
         invoice.Items.Clear();
         var order = 0;
@@ -177,7 +180,7 @@ public static class InvoiceMapper
                 Unit = string.IsNullOrWhiteSpace(item.Unit) ? "ks" : item.Unit.Trim(),
                 Quantity = item.Quantity,
                 UnitPrice = item.UnitPrice,
-                VatRate = item.VatRate ?? defaultVatRate,
+                VatRate = forceZeroVat ? 0m : item.VatRate ?? defaultVatRate,
                 SortOrder = order++
             });
         }

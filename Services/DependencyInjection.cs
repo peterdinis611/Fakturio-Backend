@@ -6,9 +6,11 @@ using Fakturio.Api.Services.Customers;
 using Fakturio.Api.Services.Exports;
 using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Jobs;
+using Fakturio.Api.Services.Payments;
 using Fakturio.Api.Services.Reminders;
 using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Search;
+using Fakturio.Api.Services.ServiceCatalog;
 
 namespace Fakturio.Api.Services;
 
@@ -40,6 +42,8 @@ public static class DependencyInjection
 
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();
         services.AddScoped<IExportService, CsvExportService>();
+        services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
+        services.AddScoped<IPaymentImportService, PaymentImportService>();
 
         return services;
     }

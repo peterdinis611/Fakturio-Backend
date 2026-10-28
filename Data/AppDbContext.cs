@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
+    public DbSet<ServiceCatalogItem> ServiceCatalogItems => Set<ServiceCatalogItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -78,6 +79,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(i => i.SellerIco).HasMaxLength(20);
             entity.Property(i => i.SellerDic).HasMaxLength(20);
             entity.Property(i => i.SellerIcDph).HasMaxLength(30);
+            entity.Property(i => i.SellerIsVatPayer).HasDefaultValue(true);
             entity.Property(i => i.SellerStreet).HasMaxLength(200);
             entity.Property(i => i.SellerCity).HasMaxLength(100);
             entity.Property(i => i.SellerPostalCode).HasMaxLength(20);
@@ -97,6 +99,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(i => i.Status);
             entity.HasIndex(i => i.IssueDate);
             entity.HasIndex(i => i.DueDate);
+            entity.HasIndex(i => i.VariableSymbol);
             entity.HasOne(i => i.Customer)
                 .WithMany(c => c.Invoices)
                 .HasForeignKey(i => i.CustomerId)
@@ -118,6 +121,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(i => i.Items)
                 .HasForeignKey(ii => ii.InvoiceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ServiceCatalogItem>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Description).HasMaxLength(500).IsRequired();
+            entity.Property(s => s.Unit).HasMaxLength(20).HasDefaultValue("ks");
+            entity.Property(s => s.UnitPrice).HasPrecision(18, 4);
+            entity.Property(s => s.VatRate).HasPrecision(5, 2);
+            entity.HasIndex(s => s.IsActive);
+            entity.HasIndex(s => s.SortOrder);
         });
     }
 }

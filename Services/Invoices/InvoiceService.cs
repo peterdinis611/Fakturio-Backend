@@ -121,7 +121,8 @@ public class InvoiceService(
         if (ServiceGuards.ValidateInvoiceDates(issueDate, dueDate, request.DeliveryDate) is { } dateError)
             return Fail<InvoiceResponse>(dateError);
 
-        var defaultVat = company?.DefaultVatRate ?? 23m;
+        var isVatPayer = company?.IsVatPayer ?? true;
+        var defaultVat = isVatPayer ? company?.DefaultVatRate ?? 23m : 0m;
         var currency = string.IsNullOrWhiteSpace(request.Currency)
             ? company?.DefaultCurrency ?? "EUR"
             : request.Currency.Trim().ToUpperInvariant();
@@ -158,7 +159,7 @@ public class InvoiceService(
 
         InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
         InvoiceMapper.ApplySellerSnapshot(invoice, company);
-        InvoiceMapper.ReplaceItems(invoice, request.Items!, defaultVat);
+        InvoiceMapper.ReplaceItems(invoice, request.Items!, defaultVat, forceZeroVat: !isVatPayer);
         InvoiceCalculator.RecalculateTotals(invoice);
 
         if (ServiceGuards.EnsurePositiveTotal(invoice.Total) is { } totalError)
@@ -217,7 +218,10 @@ public class InvoiceService(
         invoice.Notes = request.Notes?.Trim();
 
         InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
-        InvoiceMapper.ReplaceItems(invoice, request.Items!, company?.DefaultVatRate ?? 23m);
+        InvoiceMapper.ApplySellerSnapshot(invoice, company);
+        var isVatPayer = company?.IsVatPayer ?? invoice.SellerIsVatPayer;
+        var defaultVat = isVatPayer ? company?.DefaultVatRate ?? 23m : 0m;
+        InvoiceMapper.ReplaceItems(invoice, request.Items!, defaultVat, forceZeroVat: !isVatPayer);
         InvoiceCalculator.RecalculateTotals(invoice);
 
         if (ServiceGuards.EnsurePositiveTotal(invoice.Total) is { } totalError)
@@ -363,6 +367,7 @@ public class InvoiceService(
             SellerIco = source.SellerIco,
             SellerDic = source.SellerDic,
             SellerIcDph = source.SellerIcDph,
+            SellerIsVatPayer = company?.IsVatPayer ?? source.SellerIsVatPayer,
             SellerStreet = source.SellerStreet,
             SellerCity = source.SellerCity,
             SellerPostalCode = source.SellerPostalCode,
@@ -380,6 +385,13 @@ public class InvoiceService(
             Notes = source.Notes
         };
 
+        var forceZeroVat = !(company?.IsVatPayer ?? source.SellerIsVatPayer);
+        if (forceZeroVat)
+        {
+            clone.SellerIcDph = null;
+            clone.SellerIsVatPayer = false;
+        }
+
         foreach (var item in source.Items.OrderBy(i => i.SortOrder))
         {
             clone.Items.Add(new InvoiceItem
@@ -388,7 +400,7 @@ public class InvoiceService(
                 Unit = item.Unit,
                 Quantity = item.Quantity,
                 UnitPrice = item.UnitPrice,
-                VatRate = item.VatRate,
+                VatRate = forceZeroVat ? 0m : item.VatRate,
                 SortOrder = item.SortOrder
             });
         }

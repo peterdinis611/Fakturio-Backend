@@ -25,6 +25,7 @@ public class Invoice
     public string? SellerIco { get; set; }
     public string? SellerDic { get; set; }
     public string? SellerIcDph { get; set; }
+    public bool SellerIsVatPayer { get; set; } = true;
     public string? SellerStreet { get; set; }
     public string? SellerCity { get; set; }
     public string? SellerPostalCode { get; set; }

@@ -97,6 +97,7 @@ public record InvoiceResponse(
     Guid CustomerId,
     InvoicePartyResponse Customer,
     InvoicePartyResponse? Seller,
+    bool SellerIsVatPayer,
     DateOnly IssueDate,
     DateOnly DueDate,
     DateOnly? DeliveryDate,

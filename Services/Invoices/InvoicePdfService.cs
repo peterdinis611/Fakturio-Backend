@@ -75,8 +75,15 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                         left.Item().Text($"IČO: {invoice.SellerIco}");
                     if (!string.IsNullOrWhiteSpace(invoice.SellerDic))
                         left.Item().Text($"DIČ: {invoice.SellerDic}");
-                    if (!string.IsNullOrWhiteSpace(invoice.SellerIcDph))
-                        left.Item().Text($"IČ DPH: {invoice.SellerIcDph}");
+                    if (invoice.SellerIsVatPayer)
+                    {
+                        if (!string.IsNullOrWhiteSpace(invoice.SellerIcDph))
+                            left.Item().Text($"IČ DPH: {invoice.SellerIcDph}");
+                    }
+                    else
+                    {
+                        left.Item().Text("Nie som platca DPH").FontSize(9).FontColor(Colors.Grey.Darken1);
+                    }
                     left.Item().Text(FormatAddress(
                         invoice.SellerStreet, invoice.SellerCity,
                         invoice.SellerPostalCode, invoice.SellerCountry));
@@ -116,6 +123,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                 row.RelativeItem().Element(c => MetaBox(c, invoice));
             });
 
+            var showVat = invoice.SellerIsVatPayer;
+
             col.Item().Table(table =>
             {
                 table.ColumnsDefinition(columns =>
@@ -125,7 +134,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                     columns.RelativeColumn();
                     columns.RelativeColumn();
                     columns.RelativeColumn();
-                    columns.RelativeColumn();
+                    if (showVat)
+                        columns.RelativeColumn();
                     columns.RelativeColumn();
                 });
 
@@ -136,7 +146,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                     header.Cell().Element(HeaderCell).AlignRight().Text("Množ.");
                     header.Cell().Element(HeaderCell).AlignRight().Text("MJ");
                     header.Cell().Element(HeaderCell).AlignRight().Text("Cena");
-                    header.Cell().Element(HeaderCell).AlignRight().Text("DPH %");
+                    if (showVat)
+                        header.Cell().Element(HeaderCell).AlignRight().Text("DPH %");
                     header.Cell().Element(HeaderCell).AlignRight().Text("Spolu");
                 });
 
@@ -148,7 +159,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                     table.Cell().Element(BodyCell).AlignRight().Text(item.Quantity.ToString("0.####"));
                     table.Cell().Element(BodyCell).AlignRight().Text(item.Unit);
                     table.Cell().Element(BodyCell).AlignRight().Text(Money(item.UnitPrice, invoice.Currency));
-                    table.Cell().Element(BodyCell).AlignRight().Text($"{item.VatRate:0.##}");
+                    if (showVat)
+                        table.Cell().Element(BodyCell).AlignRight().Text($"{item.VatRate:0.##}");
                     table.Cell().Element(BodyCell).AlignRight().Text(Money(item.Total, invoice.Currency));
                 }
             });
@@ -168,17 +180,21 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
 
                 row.ConstantItem(220).Column(totals =>
                 {
-                    totals.Item().Row(r =>
+                    if (showVat)
                     {
-                        r.RelativeItem().Text("Základ:");
-                        r.ConstantItem(100).AlignRight().Text(Money(invoice.Subtotal, invoice.Currency));
-                    });
-                    totals.Item().Row(r =>
-                    {
-                        r.RelativeItem().Text("DPH:");
-                        r.ConstantItem(100).AlignRight().Text(Money(invoice.VatTotal, invoice.Currency));
-                    });
-                    totals.Item().PaddingTop(4).Row(r =>
+                        totals.Item().Row(r =>
+                        {
+                            r.RelativeItem().Text("Základ:");
+                            r.ConstantItem(100).AlignRight().Text(Money(invoice.Subtotal, invoice.Currency));
+                        });
+                        totals.Item().Row(r =>
+                        {
+                            r.RelativeItem().Text("DPH:");
+                            r.ConstantItem(100).AlignRight().Text(Money(invoice.VatTotal, invoice.Currency));
+                        });
+                    }
+
+                    totals.Item().PaddingTop(showVat ? 4 : 0).Row(r =>
                     {
                         r.RelativeItem().Text("Celkom:").SemiBold().FontSize(12);
                         r.ConstantItem(100).AlignRight().Text(Money(invoice.Total, invoice.Currency))
