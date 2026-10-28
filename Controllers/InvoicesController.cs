@@ -18,6 +18,7 @@ public sealed class InvoicesController(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
         [FromQuery] InvoiceStatus? status = null,
+        [FromQuery] InvoiceDocumentType? documentType = null,
         [FromQuery] Guid? customerId = null,
         [FromQuery] string? search = null,
         [FromQuery] DateOnly? issueFrom = null,
@@ -25,7 +26,7 @@ public sealed class InvoicesController(
         [FromQuery] bool? overdueOnly = null,
         CancellationToken ct = default)
         => Ok(await invoices.ListAsync(
-            new InvoiceListQuery(page, pageSize, status, customerId, search, issueFrom, issueTo, overdueOnly),
+            new InvoiceListQuery(page, pageSize, status, documentType, customerId, search, issueFrom, issueTo, overdueOnly),
             ct));
 
     [HttpGet("stats")]
@@ -126,6 +127,34 @@ public sealed class InvoicesController(
     public async Task<ActionResult<InvoiceResponse>> Duplicate(Guid id, CancellationToken ct)
     {
         var result = await invoices.DuplicateAsync(id, ct);
+        return result.ToActionResult(this, nameof(Get), i => new { id = i.Id });
+    }
+
+    [HttpPost("{id:guid}/credit-note")]
+    [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status201Created)]
+    public async Task<ActionResult<InvoiceResponse>> CreateCreditNote(
+        Guid id,
+        [FromBody] CreateCreditNoteRequest? request,
+        CancellationToken ct)
+    {
+        var result = await invoices.CreateCreditNoteAsync(
+            id,
+            request ?? new CreateCreditNoteRequest(null, null, null, null),
+            ct);
+        return result.ToActionResult(this, nameof(Get), i => new { id = i.Id });
+    }
+
+    [HttpPost("{id:guid}/finalize-proforma")]
+    [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status201Created)]
+    public async Task<ActionResult<InvoiceResponse>> FinalizeProforma(
+        Guid id,
+        [FromBody] FinalizeProformaRequest? request,
+        CancellationToken ct)
+    {
+        var result = await invoices.FinalizeProformaAsync(
+            id,
+            request ?? new FinalizeProformaRequest(null, null, null),
+            ct);
         return result.ToActionResult(this, nameof(Get), i => new { id = i.Id });
     }
 

@@ -13,6 +13,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ResumeProfile> ResumeProfiles => Set<ResumeProfile>();
     public DbSet<ResumeEntry> ResumeEntries => Set<ResumeEntry>();
     public DbSet<AppUser> Users => Set<AppUser>();
+    public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -56,6 +57,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(c => c.DefaultVatRate).HasPrecision(5, 2);
             entity.Property(c => c.DefaultCurrency).HasMaxLength(3).HasDefaultValue("EUR");
             entity.Property(c => c.InvoicePrefix).HasMaxLength(20);
+            entity.Property(c => c.ProformaPrefix).HasMaxLength(20);
+            entity.Property(c => c.CreditNotePrefix).HasMaxLength(20);
             entity.Property(c => c.DefaultPaymentMethod).HasMaxLength(50).HasDefaultValue("bank_transfer");
             entity.Property(c => c.DefaultConstantSymbol).HasMaxLength(10);
             entity.Property(c => c.DefaultInvoiceNotes).HasMaxLength(2000);
@@ -69,6 +72,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(i => i.Id);
             entity.Property(i => i.Number).HasMaxLength(50).IsRequired();
             entity.HasIndex(i => i.Number).IsUnique();
+            entity.Property(i => i.DocumentType).HasDefaultValue(InvoiceDocumentType.Invoice);
+            entity.HasIndex(i => i.DocumentType);
+            entity.Property(i => i.RelatedInvoiceNumber).HasMaxLength(50);
+            entity.HasIndex(i => i.RelatedInvoiceId);
+            entity.HasOne(i => i.RelatedInvoice)
+                .WithMany()
+                .HasForeignKey(i => i.RelatedInvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
             entity.Property(i => i.CustomerName).HasMaxLength(200).IsRequired();
             entity.Property(i => i.CustomerIco).HasMaxLength(20);
             entity.Property(i => i.CustomerDic).HasMaxLength(20);
@@ -172,6 +183,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(u => u.ImageUrl).HasMaxLength(500);
             entity.HasIndex(u => u.ClerkUserId).IsUnique();
             entity.HasIndex(u => u.Email);
+        });
+
+        modelBuilder.Entity<AuditLogEntry>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.EntityType).HasMaxLength(40).IsRequired();
+            entity.Property(a => a.EntityNumber).HasMaxLength(50);
+            entity.Property(a => a.ActorClerkUserId).HasMaxLength(128);
+            entity.Property(a => a.ActorDisplayName).HasMaxLength(200);
+            entity.Property(a => a.ActorEmail).HasMaxLength(200);
+            entity.Property(a => a.Summary).HasMaxLength(500).IsRequired();
+            entity.Property(a => a.DetailsJson).HasMaxLength(4000);
+            entity.HasIndex(a => a.OccurredAt);
+            entity.HasIndex(a => a.Action);
+            entity.HasIndex(a => a.EntityId);
         });
     }
 }

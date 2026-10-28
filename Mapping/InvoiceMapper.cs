@@ -8,6 +8,7 @@ public static class InvoiceMapper
     public static InvoiceListItemResponse ToListItem(Invoice i, DateOnly today) => new(
         i.Id,
         i.Number,
+        i.DocumentType,
         i.Status,
         i.CustomerId,
         i.CustomerName,
@@ -18,6 +19,8 @@ public static class InvoiceMapper
         i.Total,
         IsOverdue(i, today),
         DaysUntilDue(i, today),
+        i.RelatedInvoiceId,
+        i.RelatedInvoiceNumber,
         i.CreatedAt
     );
 
@@ -27,6 +30,7 @@ public static class InvoiceMapper
         return new(
             i.Id,
             i.Number,
+            i.DocumentType,
             i.Status,
             i.CustomerId,
             new InvoicePartyResponse(
@@ -70,6 +74,8 @@ public static class InvoiceMapper
             i.BankIban,
             i.BankBic,
             i.Notes,
+            i.RelatedInvoiceId,
+            i.RelatedInvoiceNumber,
             i.Subtotal,
             i.VatTotal,
             i.Total,
@@ -98,6 +104,7 @@ public static class InvoiceMapper
     public static InvoiceReminderItemResponse ToReminderItem(Invoice i, DateOnly today) => new(
         i.Id,
         i.Number,
+        i.DocumentType,
         i.Status,
         i.CustomerId,
         i.CustomerName,
@@ -115,6 +122,7 @@ public static class InvoiceMapper
     public static InvoiceStatusResponse ToStatusResponse(Invoice i) => new(
         i.Id,
         i.Number,
+        i.DocumentType,
         i.Status,
         i.PaidAt,
         i.CancelReason,
@@ -122,7 +130,8 @@ public static class InvoiceMapper
     );
 
     public static bool IsOverdue(Invoice i, DateOnly today) =>
-        i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue
+        i.DocumentType == InvoiceDocumentType.Invoice
+        && i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue
         && i.DueDate < today
         && i.PaidAt is null;
 
@@ -133,6 +142,14 @@ public static class InvoiceMapper
 
         return i.DueDate.DayNumber - today.DayNumber;
     }
+
+    /// <summary>Revenue sign: credit notes reduce totals; proformas are excluded by callers.</summary>
+    public static decimal SignedTotal(Invoice i) =>
+        i.DocumentType == InvoiceDocumentType.CreditNote ? -Math.Abs(i.Total) : i.Total;
+
+    public static bool CountsInRevenue(Invoice i) =>
+        i.DocumentType != InvoiceDocumentType.Proforma
+        && i.Status is not InvoiceStatus.Cancelled and not InvoiceStatus.Draft;
 
     public static void ApplyCustomerSnapshot(Invoice invoice, Customer customer)
     {
@@ -185,4 +202,11 @@ public static class InvoiceMapper
             });
         }
     }
+
+    public static string DocumentTypeLabel(InvoiceDocumentType type) => type switch
+    {
+        InvoiceDocumentType.Proforma => "Zálohová faktúra",
+        InvoiceDocumentType.CreditNote => "Dobropis",
+        _ => "Faktúra"
+    };
 }

@@ -32,9 +32,9 @@ public class ReportService(AppDbContext db) : IReportService
         var overdue = invoices.Where(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue)
             .ToList();
 
-        var issuedAmount = active.Sum(i => i.Total);
-        var paidAmount = paid.Sum(i => i.Total);
-        var outstandingAmount = outstanding.Sum(i => i.Total);
+        var issuedAmount = active.Sum(InvoiceMapper.SignedTotal);
+        var paidAmount = paid.Sum(InvoiceMapper.SignedTotal);
+        var outstandingAmount = outstanding.Sum(InvoiceMapper.SignedTotal);
         var collectionRate = issuedAmount == 0
             ? 0m
             : Math.Round(paidAmount / issuedAmount * 100m, 2, MidpointRounding.AwayFromZero);
@@ -49,7 +49,7 @@ public class ReportService(AppDbContext db) : IReportService
             .Select(status =>
             {
                 var group = invoices.Where(i => i.Status == status).ToList();
-                return new StatusBreakdownItem(status, group.Count, group.Sum(i => i.Total));
+                return new StatusBreakdownItem(status, group.Count, group.Sum(InvoiceMapper.SignedTotal));
             })
             .Where(x => x.Count > 0)
             .ToList();
@@ -67,11 +67,11 @@ public class ReportService(AppDbContext db) : IReportService
             issuedAmount,
             paidAmount,
             outstandingAmount,
-            overdue.Sum(i => i.Total),
-            invoices.Where(i => i.Status == InvoiceStatus.Cancelled).Sum(i => i.Total),
+            overdue.Sum(InvoiceMapper.SignedTotal),
+            invoices.Where(i => i.Status == InvoiceStatus.Cancelled).Sum(InvoiceMapper.SignedTotal),
             active.Count == 0
                 ? 0
-                : Math.Round(active.Average(i => i.Total), 2, MidpointRounding.AwayFromZero),
+                : Math.Round(active.Average(i => InvoiceMapper.SignedTotal(i)), 2, MidpointRounding.AwayFromZero),
             paymentDays.Count == 0 ? null : Math.Round(paymentDays.Average(), 1),
             collectionRate,
             DefaultCurrency,
@@ -91,6 +91,7 @@ public class ReportService(AppDbContext db) : IReportService
         var invoices = await db.Invoices
             .AsNoTracking()
             .Where(i =>
+                i.DocumentType != InvoiceDocumentType.Proforma &&
                 i.Status != InvoiceStatus.Cancelled &&
                 ((i.IssueDate >= from && i.IssueDate <= to) ||
                  (i.PaidAt != null && i.PaidAt >= from && i.PaidAt <= to)))
@@ -121,10 +122,10 @@ public class ReportService(AppDbContext db) : IReportService
                 month,
                 $"{selectedYear}-{month:D2}",
                 issued.Count,
-                issued.Sum(i => i.Total),
+                issued.Sum(InvoiceMapper.SignedTotal),
                 paid.Count,
-                paid.Sum(i => i.Total),
-                outstanding.Sum(i => i.Total));
+                paid.Sum(InvoiceMapper.SignedTotal),
+                outstanding.Sum(InvoiceMapper.SignedTotal));
         }).ToList();
 
         return Ok(new MonthlyRevenueResponse(
@@ -226,7 +227,7 @@ public class ReportService(AppDbContext db) : IReportService
             .Where(i => i.Status != InvoiceStatus.Cancelled && i.Status != InvoiceStatus.Draft)
             .ToList();
 
-        var totalRevenue = invoices.Sum(i => i.Total);
+        var totalRevenue = invoices.Sum(InvoiceMapper.SignedTotal);
         var customers = invoices
             .GroupBy(i => new { i.CustomerId, i.CustomerName, i.CustomerIco })
             .Select(g =>
@@ -241,7 +242,7 @@ public class ReportService(AppDbContext db) : IReportService
                     .Select(i => (double)(i.PaidAt!.Value.DayNumber - i.IssueDate.DayNumber))
                     .Where(d => d >= 0)
                     .ToList();
-                var amount = list.Sum(i => i.Total);
+                var amount = list.Sum(InvoiceMapper.SignedTotal);
 
                 return new TopCustomerItem(
                     g.Key.CustomerId,
@@ -251,8 +252,8 @@ public class ReportService(AppDbContext db) : IReportService
                     paid.Count,
                     outstanding.Count,
                     amount,
-                    paid.Sum(i => i.Total),
-                    outstanding.Sum(i => i.Total),
+                    paid.Sum(InvoiceMapper.SignedTotal),
+                    outstanding.Sum(InvoiceMapper.SignedTotal),
                     paymentDays.Count == 0 ? null : Math.Round(paymentDays.Average(), 1),
                     totalRevenue == 0
                         ? 0
@@ -275,18 +276,24 @@ public class ReportService(AppDbContext db) : IReportService
             return Fail<VatReportResponse>(rangeError);
 
         var invoices = (await LoadInvoicesAsync(from, to, includeItems: true, ct))
-            .Where(i => i.Status is InvoiceStatus.Issued or InvoiceStatus.Paid or InvoiceStatus.Overdue)
+            .Where(i =>
+                i.DocumentType != InvoiceDocumentType.Proforma
+                && i.Status is InvoiceStatus.Issued or InvoiceStatus.Paid or InvoiceStatus.Overdue)
             .ToList();
 
         var lines = invoices
-            .SelectMany(i => i.Items.Select(item => new
+            .SelectMany(i =>
             {
-                InvoiceId = i.Id,
-                item.VatRate,
-                TaxBase = item.Subtotal,
-                Vat = item.VatAmount,
-                Gross = item.Total
-            }))
+                var sign = i.DocumentType == InvoiceDocumentType.CreditNote ? -1m : 1m;
+                return i.Items.Select(item => new
+                {
+                    InvoiceId = i.Id,
+                    item.VatRate,
+                    TaxBase = item.Subtotal * sign,
+                    Vat = item.VatAmount * sign,
+                    Gross = item.Total * sign
+                });
+            })
             .ToList();
 
         var byRate = lines
@@ -317,7 +324,8 @@ public class ReportService(AppDbContext db) : IReportService
         bool includeItems,
         CancellationToken ct)
     {
-        IQueryable<Invoice> query = db.Invoices.AsNoTracking();
+        IQueryable<Invoice> query = db.Invoices.AsNoTracking()
+            .Where(i => i.DocumentType != InvoiceDocumentType.Proforma);
         if (includeItems)
             query = query.Include(i => i.Items);
 

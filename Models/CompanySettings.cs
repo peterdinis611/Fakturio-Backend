@@ -36,6 +36,10 @@ public class CompanySettings
     public decimal DefaultVatRate { get; set; } = 23m;
     public string DefaultCurrency { get; set; } = "EUR";
     public string? InvoicePrefix { get; set; }
+    /// <summary>Prefix for zálohové / proforma (default ZF).</summary>
+    public string? ProformaPrefix { get; set; }
+    /// <summary>Prefix for dobropisy (default DOB).</summary>
+    public string? CreditNotePrefix { get; set; }
     public string? DefaultPaymentMethod { get; set; } = "bank_transfer";
     public string? DefaultConstantSymbol { get; set; }
     public string? DefaultInvoiceNotes { get; set; }

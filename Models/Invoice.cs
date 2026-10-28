@@ -5,6 +5,14 @@ public class Invoice
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Number { get; set; } = string.Empty;
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
+    public InvoiceDocumentType DocumentType { get; set; } = InvoiceDocumentType.Invoice;
+
+    /// <summary>
+    /// Original invoice for a credit note, or source proforma for a finalized tax invoice.
+    /// </summary>
+    public Guid? RelatedInvoiceId { get; set; }
+    public Invoice? RelatedInvoice { get; set; }
+    public string? RelatedInvoiceNumber { get; set; }
 
     public Guid CustomerId { get; set; }
     public Customer Customer { get; set; } = null!;

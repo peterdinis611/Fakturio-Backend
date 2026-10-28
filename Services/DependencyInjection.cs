@@ -1,6 +1,7 @@
 using Fakturio.Api.Caching;
 using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
+using Fakturio.Api.Services.Audit;
 using Fakturio.Api.Services.Company;
 using Fakturio.Api.Services.Customers;
 using Fakturio.Api.Services.Exports;
@@ -29,6 +30,10 @@ public static class DependencyInjection
         services.AddHostedService<OverdueSyncBackgroundService>();
         services.AddScoped<IReminderNotifier, LoggingReminderNotifier>();
         services.AddHostedService<ReminderBackgroundService>();
+
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentActorAccessor, CurrentActorAccessor>();
+        services.AddScoped<IAuditLogService, AuditLogService>();
 
         services.AddScoped<IInvoiceNumberService, InvoiceNumberService>();
         services.AddScoped<IInvoiceService, InvoiceService>();

@@ -20,6 +20,7 @@ public static class ErrorCodes
     public const string PaidToDraft = "paid_to_draft";
     public const string InvalidPaidAt = "invalid_paid_at";
     public const string InvalidStatus = "invalid_status";
+    public const string InvalidDocumentType = "invalid_document_type";
     public const string UseCancelEndpoint = "use_cancel_endpoint";
     public const string InvalidDateRange = "invalid_date_range";
     public const string DateRangeTooLarge = "date_range_too_large";

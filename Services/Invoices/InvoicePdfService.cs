@@ -91,8 +91,15 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
 
                 row.ConstantItem(220).AlignRight().Column(right =>
                 {
-                    right.Item().Text("FAKTÚRA").FontSize(22).Bold().FontColor(Colors.Blue.Darken3);
+                    right.Item().Text(DocumentTitle(invoice.DocumentType))
+                        .FontSize(22).Bold().FontColor(Colors.Blue.Darken3);
                     right.Item().Text($"č. {invoice.Number}").FontSize(14).SemiBold();
+                    if (!string.IsNullOrWhiteSpace(invoice.RelatedInvoiceNumber))
+                    {
+                        right.Item().PaddingTop(2)
+                            .Text($"K dokladu: {invoice.RelatedInvoiceNumber}")
+                            .FontSize(9).FontColor(Colors.Grey.Darken1);
+                    }
                     right.Item().PaddingTop(6).Text($"Stav: {StatusLabel(invoice.Status)}");
                 });
             });
@@ -297,5 +304,12 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         InvoiceStatus.Cancelled => "Zrušená",
         InvoiceStatus.Overdue => "Po splatnosti",
         _ => status.ToString()
+    };
+
+    private static string DocumentTitle(InvoiceDocumentType type) => type switch
+    {
+        InvoiceDocumentType.Proforma => "ZÁLOHOVÁ FAKTÚRA",
+        InvoiceDocumentType.CreditNote => "DOBROPIS",
+        _ => "FAKTÚRA"
     };
 }

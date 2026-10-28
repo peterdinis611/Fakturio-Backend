@@ -1,23 +1,26 @@
 using Fakturio.Api.Data;
 using Fakturio.Api.Interfaces;
+using Fakturio.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Invoices;
 
 public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
 {
-    /// <summary>
-    /// Generates sequential invoice numbers: [prefix]YYYYNNNN (e.g. FA20260001).
-    /// </summary>
-    public async Task<string> NextAsync(string? prefix = null, CancellationToken ct = default)
+    public async Task<string> NextAsync(
+        InvoiceDocumentType documentType,
+        string? invoicePrefix = null,
+        string? proformaPrefix = null,
+        string? creditNotePrefix = null,
+        CancellationToken ct = default)
     {
         var year = DateTime.UtcNow.Year;
-        var cleanPrefix = string.IsNullOrWhiteSpace(prefix) ? string.Empty : prefix.Trim();
+        var cleanPrefix = ResolvePrefix(documentType, invoicePrefix, proformaPrefix, creditNotePrefix);
         var yearPart = $"{year}";
         var startsWith = $"{cleanPrefix}{yearPart}";
 
         var lastNumber = await db.Invoices
-            .Where(i => i.Number.StartsWith(startsWith))
+            .Where(i => i.DocumentType == documentType && i.Number.StartsWith(startsWith))
             .OrderByDescending(i => i.Number)
             .Select(i => i.Number)
             .FirstOrDefaultAsync(ct);
@@ -34,4 +37,18 @@ public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
 
         return $"{cleanPrefix}{yearPart}{sequence:D4}";
     }
+
+    private static string ResolvePrefix(
+        InvoiceDocumentType documentType,
+        string? invoicePrefix,
+        string? proformaPrefix,
+        string? creditNotePrefix) =>
+        documentType switch
+        {
+            InvoiceDocumentType.Proforma =>
+                string.IsNullOrWhiteSpace(proformaPrefix) ? "ZF" : proformaPrefix.Trim(),
+            InvoiceDocumentType.CreditNote =>
+                string.IsNullOrWhiteSpace(creditNotePrefix) ? "DOB" : creditNotePrefix.Trim(),
+            _ => string.IsNullOrWhiteSpace(invoicePrefix) ? string.Empty : invoicePrefix.Trim()
+        };
 }

@@ -89,6 +89,10 @@ public class CreateInvoiceRequestValidator : AbstractValidator<CreateInvoiceRequ
         RuleFor(x => x.Status)
             .Must(s => s is null or InvoiceStatus.Draft or InvoiceStatus.Issued)
             .WithMessage("New invoices can only be Draft or Issued.");
+
+        RuleFor(x => x.DocumentType)
+            .Must(t => t is null or InvoiceDocumentType.Invoice or InvoiceDocumentType.Proforma)
+            .WithMessage("New documents can only be Invoice or Proforma. Use credit-note endpoint for dobropis.");
     }
 
     private static readonly HashSet<string> AllowedPaymentMethods =
@@ -177,5 +181,33 @@ public class CancelInvoiceRequestValidator : AbstractValidator<CancelInvoiceRequ
             .NotEmpty().WithMessage("Cancel reason is required.")
             .MinimumLength(3).WithMessage("Cancel reason must be at least 3 characters.")
             .MaximumLength(500);
+    }
+}
+
+public class CreateCreditNoteRequestValidator : AbstractValidator<CreateCreditNoteRequest>
+{
+    public CreateCreditNoteRequestValidator()
+    {
+        RuleFor(x => x.Notes).MaximumLength(2000);
+        RuleFor(x => x.DueDate)
+            .GreaterThanOrEqualTo(x => x.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow))
+            .When(x => x.DueDate.HasValue && x.IssueDate.HasValue)
+            .WithMessage("Due date cannot be before issue date.");
+
+        RuleForEach(x => x.Items)
+            .SetValidator(new CreateInvoiceItemRequestValidator())
+            .When(x => x.Items is { Count: > 0 });
+    }
+}
+
+public class FinalizeProformaRequestValidator : AbstractValidator<FinalizeProformaRequest>
+{
+    public FinalizeProformaRequestValidator()
+    {
+        RuleFor(x => x.Notes).MaximumLength(2000);
+        RuleFor(x => x.DueDate)
+            .GreaterThanOrEqualTo(x => x.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow))
+            .When(x => x.DueDate.HasValue)
+            .WithMessage("Due date cannot be before issue date.");
     }
 }

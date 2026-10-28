@@ -24,6 +24,7 @@ public record CreateInvoiceRequest(
     string? BankBic,
     string? Notes,
     InvoiceStatus? Status,
+    InvoiceDocumentType? DocumentType,
     IReadOnlyList<CreateInvoiceItemRequest> Items
 );
 
@@ -49,6 +50,19 @@ public record MarkInvoicePaidRequest(DateOnly? PaidAt);
 
 public record CancelInvoiceRequest(string Reason);
 
+public record CreateCreditNoteRequest(
+    DateOnly? IssueDate,
+    DateOnly? DueDate,
+    string? Notes,
+    IReadOnlyList<CreateInvoiceItemRequest>? Items
+);
+
+public record FinalizeProformaRequest(
+    DateOnly? IssueDate,
+    DateOnly? DueDate,
+    string? Notes
+);
+
 public record InvoiceItemResponse(
     Guid Id,
     string Description,
@@ -65,6 +79,7 @@ public record InvoiceItemResponse(
 public record InvoiceListItemResponse(
     Guid Id,
     string Number,
+    InvoiceDocumentType DocumentType,
     InvoiceStatus Status,
     Guid CustomerId,
     string CustomerName,
@@ -75,6 +90,8 @@ public record InvoiceListItemResponse(
     decimal Total,
     bool IsOverdue,
     int? DaysUntilDue,
+    Guid? RelatedInvoiceId,
+    string? RelatedInvoiceNumber,
     DateTime CreatedAt
 );
 
@@ -93,6 +110,7 @@ public record InvoicePartyResponse(
 public record InvoiceResponse(
     Guid Id,
     string Number,
+    InvoiceDocumentType DocumentType,
     InvoiceStatus Status,
     Guid CustomerId,
     InvoicePartyResponse Customer,
@@ -114,6 +132,8 @@ public record InvoiceResponse(
     string? BankIban,
     string? BankBic,
     string? Notes,
+    Guid? RelatedInvoiceId,
+    string? RelatedInvoiceNumber,
     decimal Subtotal,
     decimal VatTotal,
     decimal Total,
@@ -127,6 +147,7 @@ public record InvoiceResponse(
 public record InvoiceStatusResponse(
     Guid Id,
     string Number,
+    InvoiceDocumentType DocumentType,
     InvoiceStatus Status,
     DateOnly? PaidAt,
     string? CancelReason,
@@ -152,6 +173,7 @@ public record InvoiceStatsResponse(
 public record InvoiceReminderItemResponse(
     Guid Id,
     string Number,
+    InvoiceDocumentType DocumentType,
     InvoiceStatus Status,
     Guid CustomerId,
     string CustomerName,

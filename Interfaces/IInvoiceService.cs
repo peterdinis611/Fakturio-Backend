@@ -40,6 +40,16 @@ public interface IInvoiceService
 
     Task<ServiceResult<InvoiceResponse>> DuplicateAsync(Guid id, CancellationToken ct = default);
 
+    Task<ServiceResult<InvoiceResponse>> CreateCreditNoteAsync(
+        Guid sourceId,
+        CreateCreditNoteRequest request,
+        CancellationToken ct = default);
+
+    Task<ServiceResult<InvoiceResponse>> FinalizeProformaAsync(
+        Guid proformaId,
+        FinalizeProformaRequest request,
+        CancellationToken ct = default);
+
     Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default);
 
     Task<InvoiceStatsResponse> GetStatsAsync(
@@ -63,6 +73,7 @@ public record InvoiceListQuery(
     int Page = 1,
     int PageSize = 20,
     InvoiceStatus? Status = null,
+    InvoiceDocumentType? DocumentType = null,
     Guid? CustomerId = null,
     string? Search = null,
     DateOnly? IssueFrom = null,

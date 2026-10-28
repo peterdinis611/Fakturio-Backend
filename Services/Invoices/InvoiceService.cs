@@ -13,7 +13,8 @@ namespace Fakturio.Api.Services.Invoices;
 public class InvoiceService(
     AppDbContext db,
     IInvoiceNumberService numbers,
-    ICacheInvalidator cache) : IInvoiceService
+    ICacheInvalidator cache,
+    IAuditLogService audit) : IInvoiceService
 {
     public async Task<PagedResponse<InvoiceListItemResponse>> ListAsync(
         InvoiceListQuery query,
@@ -28,12 +29,14 @@ public class InvoiceService(
         if (query.Status.HasValue)
             invoices = invoices.Where(i => i.Status == query.Status.Value);
 
+        if (query.DocumentType.HasValue)
+            invoices = invoices.Where(i => i.DocumentType == query.DocumentType.Value);
+
         if (query.CustomerId.HasValue && query.CustomerId.Value != Guid.Empty)
             invoices = invoices.Where(i => i.CustomerId == query.CustomerId.Value);
 
         if (query.IssueFrom.HasValue && query.IssueTo.HasValue && query.IssueFrom > query.IssueTo)
         {
-            // Invalid range → empty page instead of throwing on list endpoints.
             return new PagedResponse<InvoiceListItemResponse>([], page, pageSize, 0, 0);
         }
 
@@ -46,7 +49,8 @@ public class InvoiceService(
         if (query.OverdueOnly == true)
         {
             invoices = invoices.Where(i =>
-                (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
+                i.DocumentType == InvoiceDocumentType.Invoice
+                && (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
                 && i.DueDate < today
                 && i.PaidAt == null);
         }
@@ -57,7 +61,8 @@ public class InvoiceService(
                 i.Number.Contains(search) ||
                 i.CustomerName.Contains(search) ||
                 (i.VariableSymbol != null && i.VariableSymbol.Contains(search)) ||
-                (i.CustomerIco != null && i.CustomerIco.Contains(search)));
+                (i.CustomerIco != null && i.CustomerIco.Contains(search)) ||
+                (i.RelatedInvoiceNumber != null && i.RelatedInvoiceNumber.Contains(search)));
         }
 
         var totalCount = await invoices.CountAsync(ct);
@@ -109,6 +114,12 @@ public class InvoiceService(
         if (ServiceGuards.EnsureHasItems(request.Items?.Count ?? 0) is { } itemsError)
             return Fail<InvoiceResponse>(itemsError);
 
+        var documentType = request.DocumentType ?? InvoiceDocumentType.Invoice;
+        if (documentType == InvoiceDocumentType.CreditNote)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Credit notes must be created from an existing invoice via POST /api/invoices/{id}/credit-note.",
+                ErrorCodes.InvalidDocumentType);
+
         var customer = await db.Customers.FindAsync([request.CustomerId], ct);
         if (customer is null)
             return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
@@ -133,11 +144,17 @@ public class InvoiceService(
                 "New invoices can only be Draft or Issued.",
                 ErrorCodes.InvalidStatus);
 
-        var number = await numbers.NextAsync(company?.InvoicePrefix, ct);
+        var number = await numbers.NextAsync(
+            documentType,
+            company?.InvoicePrefix,
+            company?.ProformaPrefix,
+            company?.CreditNotePrefix,
+            ct);
 
         var invoice = new Invoice
         {
             Number = number,
+            DocumentType = documentType,
             Status = status,
             IssueDate = issueDate,
             DueDate = dueDate,
@@ -167,6 +184,27 @@ public class InvoiceService(
 
         db.Invoices.Add(invoice);
         await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.Created,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"{InvoiceMapper.DocumentTypeLabel(documentType)} {invoice.Number} vytvorená ({StatusSk(status)}).",
+            new { documentType, status = status.ToString(), total = invoice.Total },
+            ct);
+
+        if (status == InvoiceStatus.Issued)
+        {
+            await audit.WriteAsync(
+                AuditAction.Issued,
+                "Invoice",
+                invoice.Id,
+                invoice.Number,
+                $"{InvoiceMapper.DocumentTypeLabel(documentType)} {invoice.Number} vystavená.",
+                null,
+                ct);
+        }
 
         return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(invoice));
     }
@@ -228,6 +266,16 @@ public class InvoiceService(
             return Fail<InvoiceResponse>(totalError);
 
         await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.Updated,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"{InvoiceMapper.DocumentTypeLabel(invoice.DocumentType)} {invoice.Number} upravená.",
+            null,
+            ct);
+
         return ServiceResult<InvoiceResponse>.Ok(InvoiceMapper.ToResponse(invoice));
     }
 
@@ -258,6 +306,7 @@ public class InvoiceService(
                 "Paid invoices cannot return to draft.",
                 ErrorCodes.PaidToDraft);
 
+        var previous = invoice.Status;
         invoice.Status = request.Status;
         invoice.UpdatedAt = DateTime.UtcNow;
 
@@ -265,6 +314,19 @@ public class InvoiceService(
             invoice.PaidAt = null;
 
         await SaveAndInvalidateAsync(ct);
+
+        if (request.Status == InvoiceStatus.Issued && previous == InvoiceStatus.Draft)
+        {
+            await audit.WriteAsync(
+                AuditAction.Issued,
+                "Invoice",
+                invoice.Id,
+                invoice.Number,
+                $"{InvoiceMapper.DocumentTypeLabel(invoice.DocumentType)} {invoice.Number} vystavená.",
+                new { from = previous.ToString(), to = request.Status.ToString() },
+                ct);
+        }
+
         return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
@@ -300,6 +362,16 @@ public class InvoiceService(
         invoice.UpdatedAt = DateTime.UtcNow;
 
         await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.Paid,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"{InvoiceMapper.DocumentTypeLabel(invoice.DocumentType)} {invoice.Number} označená ako zaplatená ({paidAt:yyyy-MM-dd}).",
+            new { paidAt = paidAt.ToString("yyyy-MM-dd") },
+            ct);
+
         return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
@@ -329,6 +401,16 @@ public class InvoiceService(
         invoice.UpdatedAt = DateTime.UtcNow;
 
         await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.Cancelled,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"{InvoiceMapper.DocumentTypeLabel(invoice.DocumentType)} {invoice.Number} zrušená.",
+            new { reason = invoice.CancelReason },
+            ct);
+
         return ServiceResult<InvoiceStatusResponse>.Ok(InvoiceMapper.ToStatusResponse(invoice));
     }
 
@@ -344,15 +426,400 @@ public class InvoiceService(
         if (source is null)
             return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
+        if (source.DocumentType == InvoiceDocumentType.CreditNote)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Credit notes cannot be duplicated. Create a new credit note from the original invoice.",
+                ErrorCodes.InvalidDocumentType);
+
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
         var issueDate = DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDays = company?.DefaultDueDays ?? 14;
-        var number = await numbers.NextAsync(company?.InvoicePrefix, ct);
+        var number = await numbers.NextAsync(
+            source.DocumentType,
+            company?.InvoicePrefix,
+            company?.ProformaPrefix,
+            company?.CreditNotePrefix,
+            ct);
 
-        var clone = new Invoice
+        var clone = CloneHeader(source, company, number, issueDate, dueDays);
+        clone.DocumentType = source.DocumentType;
+        clone.Status = InvoiceStatus.Draft;
+        clone.RelatedInvoiceId = null;
+        clone.RelatedInvoiceNumber = null;
+
+        CopyItems(source, clone, company);
+        InvoiceCalculator.RecalculateTotals(clone);
+        db.Invoices.Add(clone);
+        await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.Duplicated,
+            "Invoice",
+            clone.Id,
+            clone.Number,
+            $"{InvoiceMapper.DocumentTypeLabel(clone.DocumentType)} {clone.Number} duplikovaná z {source.Number}.",
+            new { sourceId = source.Id, sourceNumber = source.Number },
+            ct);
+
+        return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(clone));
+    }
+
+    public async Task<ServiceResult<InvoiceResponse>> CreateCreditNoteAsync(
+        Guid sourceId,
+        CreateCreditNoteRequest request,
+        CancellationToken ct = default)
+    {
+        var source = await db.Invoices
+            .AsNoTracking()
+            .Include(i => i.Items)
+            .FirstOrDefaultAsync(i => i.Id == sourceId, ct);
+
+        if (source is null)
+            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (source.DocumentType != InvoiceDocumentType.Invoice)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Credit notes can only be created from a tax invoice (not proforma or another credit note).",
+                ErrorCodes.InvalidDocumentType);
+
+        if (source.Status is InvoiceStatus.Draft or InvoiceStatus.Cancelled)
+            return ServiceResult<InvoiceResponse>.Conflict(
+                "Credit notes require an issued, paid, or overdue invoice.",
+                ErrorCodes.InvalidStatus);
+
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var dueDate = request.DueDate ?? issueDate;
+        if (dueDate < issueDate)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Due date cannot be before issue date.",
+                ErrorCodes.InvalidDateRange);
+
+        var number = await numbers.NextAsync(
+            InvoiceDocumentType.CreditNote,
+            company?.InvoicePrefix,
+            company?.ProformaPrefix,
+            company?.CreditNotePrefix,
+            ct);
+
+        var credit = CloneHeader(source, company, number, issueDate, dueDays: 0);
+        credit.DocumentType = InvoiceDocumentType.CreditNote;
+        credit.Status = InvoiceStatus.Issued;
+        credit.DueDate = dueDate;
+        credit.RelatedInvoiceId = source.Id;
+        credit.RelatedInvoiceNumber = source.Number;
+        credit.Notes = string.IsNullOrWhiteSpace(request.Notes)
+            ? $"Dobropis k faktúre {source.Number}"
+            : request.Notes.Trim();
+        credit.VariableSymbol = DigitsOnly(number);
+
+        if (request.Items is { Count: > 0 })
+        {
+            var isVatPayer = company?.IsVatPayer ?? source.SellerIsVatPayer;
+            var defaultVat = isVatPayer ? company?.DefaultVatRate ?? 23m : 0m;
+            InvoiceMapper.ReplaceItems(credit, request.Items, defaultVat, forceZeroVat: !isVatPayer);
+        }
+        else
+        {
+            CopyItems(source, credit, company);
+        }
+
+        InvoiceCalculator.RecalculateTotals(credit);
+        if (ServiceGuards.EnsurePositiveTotal(credit.Total) is { } totalError)
+            return Fail<InvoiceResponse>(totalError);
+
+        db.Invoices.Add(credit);
+        await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.CreditNoteCreated,
+            "Invoice",
+            credit.Id,
+            credit.Number,
+            $"Dobropis {credit.Number} k faktúre {source.Number}.",
+            new { relatedInvoiceId = source.Id, relatedNumber = source.Number, total = credit.Total },
+            ct);
+
+        await audit.WriteAsync(
+            AuditAction.Issued,
+            "Invoice",
+            credit.Id,
+            credit.Number,
+            $"Dobropis {credit.Number} vystavený.",
+            null,
+            ct);
+
+        return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(credit));
+    }
+
+    public async Task<ServiceResult<InvoiceResponse>> FinalizeProformaAsync(
+        Guid proformaId,
+        FinalizeProformaRequest request,
+        CancellationToken ct = default)
+    {
+        var proforma = await db.Invoices
+            .Include(i => i.Items)
+            .FirstOrDefaultAsync(i => i.Id == proformaId, ct);
+
+        if (proforma is null)
+            return ServiceResult<InvoiceResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (proforma.DocumentType != InvoiceDocumentType.Proforma)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Only a proforma (zálohová) can be finalized into a tax invoice.",
+                ErrorCodes.InvalidDocumentType);
+
+        if (proforma.Status is InvoiceStatus.Cancelled or InvoiceStatus.Draft)
+            return ServiceResult<InvoiceResponse>.Conflict(
+                "Proforma must be issued (or paid) before creating a tax invoice.",
+                ErrorCodes.InvalidStatus);
+
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var dueDays = company?.DefaultDueDays ?? 14;
+        var dueDate = request.DueDate ?? issueDate.AddDays(dueDays);
+
+        var number = await numbers.NextAsync(
+            InvoiceDocumentType.Invoice,
+            company?.InvoicePrefix,
+            company?.ProformaPrefix,
+            company?.CreditNotePrefix,
+            ct);
+
+        var invoice = CloneHeader(proforma, company, number, issueDate, dueDays);
+        invoice.DocumentType = InvoiceDocumentType.Invoice;
+        invoice.Status = InvoiceStatus.Issued;
+        invoice.DueDate = dueDate;
+        invoice.RelatedInvoiceId = proforma.Id;
+        invoice.RelatedInvoiceNumber = proforma.Number;
+        invoice.Notes = string.IsNullOrWhiteSpace(request.Notes)
+            ? $"Daňový doklad k zálohovej faktúre {proforma.Number}"
+            : request.Notes.Trim();
+        invoice.VariableSymbol = DigitsOnly(number);
+        invoice.PaidAt = null;
+
+        CopyItems(proforma, invoice, company);
+        InvoiceCalculator.RecalculateTotals(invoice);
+
+        db.Invoices.Add(invoice);
+
+        if (proforma.Status != InvoiceStatus.Paid)
+        {
+            proforma.Status = InvoiceStatus.Paid;
+            proforma.PaidAt = issueDate;
+            proforma.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.ProformaFinalized,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"Faktúra {invoice.Number} vystavená zo zálohovej {proforma.Number}.",
+            new { proformaId = proforma.Id, proformaNumber = proforma.Number },
+            ct);
+
+        await audit.WriteAsync(
+            AuditAction.Issued,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"Faktúra {invoice.Number} vystavená.",
+            null,
+            ct);
+
+        return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(invoice));
+    }
+
+    public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.FindAsync([id], ct);
+        if (invoice is null)
+            return ServiceResult.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (invoice.Status is not InvoiceStatus.Draft)
+            return ServiceResult.Conflict(
+                "Only draft invoices can be deleted. Cancel issued invoices instead.",
+                ErrorCodes.NotDraft);
+
+        var number = invoice.Number;
+        var type = invoice.DocumentType;
+        db.Invoices.Remove(invoice);
+        await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.Deleted,
+            "Invoice",
+            id,
+            number,
+            $"{InvoiceMapper.DocumentTypeLabel(type)} {number} zmazaná.",
+            null,
+            ct);
+
+        return ServiceResult.Ok(StatusCodes.Status204NoContent);
+    }
+
+    public async Task<InvoiceStatsResponse> GetStatsAsync(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var query = db.Invoices.AsNoTracking()
+            .Where(i => i.DocumentType != InvoiceDocumentType.Proforma)
+            .AsQueryable();
+
+        if (from.HasValue)
+            query = query.Where(i => i.IssueDate >= from.Value);
+        if (to.HasValue)
+            query = query.Where(i => i.IssueDate <= to.Value);
+
+        var invoices = await query.ToListAsync(ct);
+
+        var draft = invoices.Count(i => i.Status == InvoiceStatus.Draft);
+        var issued = invoices.Count(i => i.Status == InvoiceStatus.Issued);
+        var paid = invoices.Count(i => i.Status == InvoiceStatus.Paid);
+        var cancelled = invoices.Count(i => i.Status == InvoiceStatus.Cancelled);
+        var overdue = invoices.Count(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue);
+
+        decimal SumSigned(IEnumerable<Invoice> list) =>
+            list.Sum(InvoiceMapper.SignedTotal);
+
+        var paidAmount = SumSigned(invoices.Where(i => i.Status == InvoiceStatus.Paid));
+        var outstanding = SumSigned(invoices
+            .Where(i => i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue));
+        var overdueAmount = SumSigned(invoices
+            .Where(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue));
+
+        return new InvoiceStatsResponse(
+            from,
+            to,
+            invoices.Count,
+            draft,
+            issued,
+            paid,
+            overdue,
+            cancelled,
+            SumSigned(invoices.Where(i => i.Status != InvoiceStatus.Cancelled)),
+            paidAmount,
+            outstanding,
+            overdueAmount,
+            "EUR");
+    }
+
+    public async Task<IReadOnlyList<InvoiceReminderItemResponse>> GetRemindersAsync(
+        int withinDays,
+        bool onlyOverdue,
+        CancellationToken ct = default)
+    {
+        withinDays = Math.Clamp(withinDays, 0, 90);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var until = today.AddDays(withinDays);
+
+        var query = db.Invoices
+            .AsNoTracking()
+            .Where(i =>
+                i.DocumentType == InvoiceDocumentType.Invoice
+                && (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
+                && i.PaidAt == null);
+
+        if (onlyOverdue)
+            query = query.Where(i => i.DueDate < today);
+        else
+            query = query.Where(i => i.DueDate <= until);
+
+        var items = await query
+            .OrderBy(i => i.DueDate)
+            .ThenBy(i => i.Number)
+            .ToListAsync(ct);
+
+        return items.Select(i => InvoiceMapper.ToReminderItem(i, today)).ToList();
+    }
+
+    public async Task<ServiceResult<InvoiceReminderItemResponse>> MarkReminderSentAsync(
+        Guid id,
+        CancellationToken ct = default)
+    {
+        var invoice = await db.Invoices.FindAsync([id], ct);
+        if (invoice is null)
+            return ServiceResult<InvoiceReminderItemResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
+
+        if (invoice.DocumentType != InvoiceDocumentType.Invoice)
+            return ServiceResult<InvoiceReminderItemResponse>.Conflict(
+                "Reminders apply only to tax invoices.",
+                ErrorCodes.InvalidDocumentType);
+
+        if (invoice.Status is not (InvoiceStatus.Issued or InvoiceStatus.Overdue))
+            return ServiceResult<InvoiceReminderItemResponse>.Conflict(
+                "Reminders can only be sent for issued or overdue invoices.",
+                ErrorCodes.InvalidStatus);
+
+        invoice.LastReminderSentAt = DateTime.UtcNow;
+        invoice.ReminderCount += 1;
+        invoice.UpdatedAt = DateTime.UtcNow;
+        await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.ReminderSent,
+            "Invoice",
+            invoice.Id,
+            invoice.Number,
+            $"Upomienka k faktúre {invoice.Number} označená ako odoslaná (#{invoice.ReminderCount}).",
+            new { reminderCount = invoice.ReminderCount },
+            ct);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return ServiceResult<InvoiceReminderItemResponse>.Ok(
+            InvoiceMapper.ToReminderItem(invoice, today));
+    }
+
+    public async Task<SyncOverdueResponse> SyncOverdueAsync(CancellationToken ct = default)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var overdue = await db.Invoices
+            .Where(i =>
+                i.DocumentType == InvoiceDocumentType.Invoice
+                && i.Status == InvoiceStatus.Issued
+                && i.DueDate < today
+                && i.PaidAt == null)
+            .ToListAsync(ct);
+
+        foreach (var invoice in overdue)
+        {
+            invoice.Status = InvoiceStatus.Overdue;
+            invoice.UpdatedAt = DateTime.UtcNow;
+        }
+
+        if (overdue.Count > 0)
+        {
+            await SaveAndInvalidateAsync(ct);
+            foreach (var invoice in overdue)
+            {
+                await audit.WriteAsync(
+                    AuditAction.OverdueMarked,
+                    "Invoice",
+                    invoice.Id,
+                    invoice.Number,
+                    $"Faktúra {invoice.Number} označená ako po splatnosti.",
+                    null,
+                    ct);
+            }
+        }
+
+        return new SyncOverdueResponse(overdue.Count);
+    }
+
+    private static Invoice CloneHeader(
+        Invoice source,
+        CompanySettings? company,
+        string number,
+        DateOnly issueDate,
+        int dueDays) =>
+        new()
         {
             Number = number,
-            Status = InvoiceStatus.Draft,
             CustomerId = source.CustomerId,
             CustomerName = source.CustomerName,
             CustomerIco = source.CustomerIco,
@@ -385,16 +852,18 @@ public class InvoiceService(
             Notes = source.Notes
         };
 
+    private static void CopyItems(Invoice source, Invoice target, CompanySettings? company)
+    {
         var forceZeroVat = !(company?.IsVatPayer ?? source.SellerIsVatPayer);
         if (forceZeroVat)
         {
-            clone.SellerIcDph = null;
-            clone.SellerIsVatPayer = false;
+            target.SellerIcDph = null;
+            target.SellerIsVatPayer = false;
         }
 
         foreach (var item in source.Items.OrderBy(i => i.SortOrder))
         {
-            clone.Items.Add(new InvoiceItem
+            target.Items.Add(new InvoiceItem
             {
                 Description = item.Description,
                 Unit = item.Unit,
@@ -404,143 +873,6 @@ public class InvoiceService(
                 SortOrder = item.SortOrder
             });
         }
-
-        InvoiceCalculator.RecalculateTotals(clone);
-        db.Invoices.Add(clone);
-        await SaveAndInvalidateAsync(ct);
-
-        return ServiceResult<InvoiceResponse>.Created(InvoiceMapper.ToResponse(clone));
-    }
-
-    public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
-    {
-        var invoice = await db.Invoices.FindAsync([id], ct);
-        if (invoice is null)
-            return ServiceResult.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
-
-        if (invoice.Status is not InvoiceStatus.Draft)
-            return ServiceResult.Conflict(
-                "Only draft invoices can be deleted. Cancel issued invoices instead.",
-                ErrorCodes.NotDraft);
-
-        db.Invoices.Remove(invoice);
-        await SaveAndInvalidateAsync(ct);
-        return ServiceResult.Ok(StatusCodes.Status204NoContent);
-    }
-
-    public async Task<InvoiceStatsResponse> GetStatsAsync(
-        DateOnly? from,
-        DateOnly? to,
-        CancellationToken ct = default)
-    {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var query = db.Invoices.AsNoTracking().AsQueryable();
-
-        if (from.HasValue)
-            query = query.Where(i => i.IssueDate >= from.Value);
-        if (to.HasValue)
-            query = query.Where(i => i.IssueDate <= to.Value);
-
-        var invoices = await query.ToListAsync(ct);
-
-        var draft = invoices.Count(i => i.Status == InvoiceStatus.Draft);
-        var issued = invoices.Count(i => i.Status == InvoiceStatus.Issued);
-        var paid = invoices.Count(i => i.Status == InvoiceStatus.Paid);
-        var cancelled = invoices.Count(i => i.Status == InvoiceStatus.Cancelled);
-        var overdue = invoices.Count(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue);
-
-        var paidAmount = invoices.Where(i => i.Status == InvoiceStatus.Paid).Sum(i => i.Total);
-        var outstanding = invoices
-            .Where(i => i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue)
-            .Sum(i => i.Total);
-        var overdueAmount = invoices
-            .Where(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue)
-            .Sum(i => i.Total);
-
-        return new InvoiceStatsResponse(
-            from,
-            to,
-            invoices.Count,
-            draft,
-            issued,
-            paid,
-            overdue,
-            cancelled,
-            invoices.Where(i => i.Status != InvoiceStatus.Cancelled).Sum(i => i.Total),
-            paidAmount,
-            outstanding,
-            overdueAmount,
-            "EUR");
-    }
-
-    public async Task<IReadOnlyList<InvoiceReminderItemResponse>> GetRemindersAsync(
-        int withinDays,
-        bool onlyOverdue,
-        CancellationToken ct = default)
-    {
-        withinDays = Math.Clamp(withinDays, 0, 90);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var until = today.AddDays(withinDays);
-
-        var query = db.Invoices
-            .AsNoTracking()
-            .Where(i =>
-                (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
-                && i.PaidAt == null);
-
-        if (onlyOverdue)
-            query = query.Where(i => i.DueDate < today);
-        else
-            query = query.Where(i => i.DueDate <= until);
-
-        var items = await query
-            .OrderBy(i => i.DueDate)
-            .ThenBy(i => i.Number)
-            .ToListAsync(ct);
-
-        return items.Select(i => InvoiceMapper.ToReminderItem(i, today)).ToList();
-    }
-
-    public async Task<ServiceResult<InvoiceReminderItemResponse>> MarkReminderSentAsync(
-        Guid id,
-        CancellationToken ct = default)
-    {
-        var invoice = await db.Invoices.FindAsync([id], ct);
-        if (invoice is null)
-            return ServiceResult<InvoiceReminderItemResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
-
-        if (invoice.Status is not (InvoiceStatus.Issued or InvoiceStatus.Overdue))
-            return ServiceResult<InvoiceReminderItemResponse>.Conflict(
-                "Reminders can only be sent for issued or overdue invoices.",
-                ErrorCodes.InvalidStatus);
-
-        invoice.LastReminderSentAt = DateTime.UtcNow;
-        invoice.ReminderCount += 1;
-        invoice.UpdatedAt = DateTime.UtcNow;
-        await SaveAndInvalidateAsync(ct);
-
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        return ServiceResult<InvoiceReminderItemResponse>.Ok(
-            InvoiceMapper.ToReminderItem(invoice, today));
-    }
-
-    public async Task<SyncOverdueResponse> SyncOverdueAsync(CancellationToken ct = default)
-    {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var overdue = await db.Invoices
-            .Where(i => i.Status == InvoiceStatus.Issued && i.DueDate < today && i.PaidAt == null)
-            .ToListAsync(ct);
-
-        foreach (var invoice in overdue)
-        {
-            invoice.Status = InvoiceStatus.Overdue;
-            invoice.UpdatedAt = DateTime.UtcNow;
-        }
-
-        if (overdue.Count > 0)
-            await SaveAndInvalidateAsync(ct);
-
-        return new SyncOverdueResponse(overdue.Count);
     }
 
     private async Task SaveAndInvalidateAsync(CancellationToken ct)
@@ -559,4 +891,14 @@ public class InvoiceService(
         string.IsNullOrWhiteSpace(iban)
             ? null
             : iban.Replace(" ", "", StringComparison.Ordinal).ToUpperInvariant();
+
+    private static string StatusSk(InvoiceStatus status) => status switch
+    {
+        InvoiceStatus.Draft => "koncept",
+        InvoiceStatus.Issued => "vystavená",
+        InvoiceStatus.Paid => "zaplatená",
+        InvoiceStatus.Cancelled => "zrušená",
+        InvoiceStatus.Overdue => "po splatnosti",
+        _ => status.ToString()
+    };
 }
