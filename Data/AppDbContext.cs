@@ -10,6 +10,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<ServiceCatalogItem> ServiceCatalogItems => Set<ServiceCatalogItem>();
+    public DbSet<ResumeProfile> ResumeProfiles => Set<ResumeProfile>();
+    public DbSet<ResumeEntry> ResumeEntries => Set<ResumeEntry>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -132,6 +134,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(s => s.VatRate).HasPrecision(5, 2);
             entity.HasIndex(s => s.IsActive);
             entity.HasIndex(s => s.SortOrder);
+        });
+
+        modelBuilder.Entity<ResumeProfile>(entity =>
+        {
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.FullName).HasMaxLength(200);
+            entity.Property(p => p.Headline).HasMaxLength(300);
+            entity.Property(p => p.Summary).HasMaxLength(4000);
+            entity.Property(p => p.Email).HasMaxLength(200);
+            entity.Property(p => p.Phone).HasMaxLength(50);
+            entity.Property(p => p.Location).HasMaxLength(200);
+            entity.Property(p => p.Website).HasMaxLength(300);
+            entity.Property(p => p.Skills).HasMaxLength(2000);
+        });
+
+        modelBuilder.Entity<ResumeEntry>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Type).HasMaxLength(40).IsRequired();
+            entity.Property(e => e.Title).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Organization).HasMaxLength(200);
+            entity.Property(e => e.Location).HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(4000);
+            entity.HasIndex(e => e.Type);
+            entity.HasIndex(e => e.SortOrder);
         });
     }
 }
