@@ -12,6 +12,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ServiceCatalogItem> ServiceCatalogItems => Set<ServiceCatalogItem>();
     public DbSet<ResumeProfile> ResumeProfiles => Set<ResumeProfile>();
     public DbSet<ResumeEntry> ResumeEntries => Set<ResumeEntry>();
+    public DbSet<AppUser> Users => Set<AppUser>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -159,6 +160,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(e => e.Description).HasMaxLength(4000);
             entity.HasIndex(e => e.Type);
             entity.HasIndex(e => e.SortOrder);
+        });
+
+        modelBuilder.Entity<AppUser>(entity =>
+        {
+            entity.HasKey(u => u.Id);
+            entity.Property(u => u.ClerkUserId).HasMaxLength(128).IsRequired();
+            entity.Property(u => u.Email).HasMaxLength(200);
+            entity.Property(u => u.FirstName).HasMaxLength(100);
+            entity.Property(u => u.LastName).HasMaxLength(100);
+            entity.Property(u => u.ImageUrl).HasMaxLength(500);
+            entity.HasIndex(u => u.ClerkUserId).IsUnique();
+            entity.HasIndex(u => u.Email);
         });
     }
 }

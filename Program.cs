@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Fakturio.Api.Data;
+using Fakturio.Api.Extensions;
 using Fakturio.Api.Infrastructure;
 using Fakturio.Api.Services;
 using Fakturio.Api.Validation;
@@ -45,6 +46,7 @@ builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerRequestValidator>();
 builder.Services.AddApplicationCaching(builder.Configuration);
 builder.Services.AddApplicationServices(builder.Configuration);
+builder.Services.AddClerkJwtAuthentication(builder.Configuration);
 
 builder.Services.AddCors(options =>
 {
@@ -74,6 +76,8 @@ if (app.Environment.IsDevelopment())
 app.UseExceptionHandler();
 app.UseCors();
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

@@ -12,6 +12,7 @@ using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Resume;
 using Fakturio.Api.Services.Search;
 using Fakturio.Api.Services.ServiceCatalog;
+using Fakturio.Api.Services.Users;
 
 namespace Fakturio.Api.Services;
 
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
         services.AddScoped<IPaymentImportService, PaymentImportService>();
         services.AddScoped<IResumeService, ResumeService>();
+        services.AddScoped<IUserService, UserService>();
 
         return services;
     }

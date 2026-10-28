@@ -609,6 +609,52 @@ namespace Fakturio.Api.Data.Migrations
                     b.ToTable("ResumeEntries");
                 });
 
+            modelBuilder.Entity("Fakturio.Api.Models.AppUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ClerkUserId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FirstName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastName")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClerkUserId")
+                        .IsUnique();
+
+                    b.HasIndex("Email");
+
+                    b.ToTable("Users");
+                });
+
             modelBuilder.Entity("Fakturio.Api.Models.Invoice", b =>
                 {
                     b.HasOne("Fakturio.Api.Models.Customer", "Customer")
