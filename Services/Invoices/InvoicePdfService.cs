@@ -13,6 +13,12 @@ namespace Fakturio.Api.Services.Invoices;
 
 public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
 {
+    private static readonly string Accent = "#5B8DEF";
+    private static readonly string AccentSoft = "#E8F0FE";
+    private static readonly string HeaderGray = "#F0F2F5";
+    private static readonly string Ink = "#1A1D21";
+    private static readonly string Muted = "#5C6570";
+
     public async Task<ServiceResult<InvoicePdfFile>> GenerateAsync(
         Guid invoiceId,
         CancellationToken ct = default)
@@ -25,35 +31,36 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         if (invoice is null)
             return ServiceResult<InvoicePdfFile>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
-        var epcPayload = invoice.Status is InvoiceStatus.Cancelled or InvoiceStatus.Draft
-            ? null
-            : EpcQrPayload.TryBuild(
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var bankName = company?.BankName;
+        var footerNote = company?.InvoiceFooter;
+
+        PaymentQrResult? qr = null;
+        if (invoice.Status is not (InvoiceStatus.Cancelled or InvoiceStatus.Draft))
+        {
+            qr = PaymentQr.TryCreate(
                 invoice.BankIban,
+                invoice.BankBic,
                 invoice.SellerName,
                 invoice.Total,
                 invoice.Currency,
-                invoice.BankBic,
-                remittance: invoice.VariableSymbol);
-
-        var qrPng = EpcQrImage.TryCreatePng(epcPayload);
+                invoice.DueDate,
+                invoice.VariableSymbol,
+                invoice.ConstantSymbol,
+                invoice.SpecificSymbol,
+                paymentNote: invoice.Number);
+        }
 
         var bytes = Document.Create(container =>
         {
             container.Page(page =>
             {
                 page.Size(PageSizes.A4);
-                page.Margin(40);
-                page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Grey.Darken3));
+                page.MarginHorizontal(36);
+                page.MarginVertical(32);
+                page.DefaultTextStyle(x => x.FontSize(9.5f).FontColor(Ink).FontFamily("Arial"));
 
-                page.Header().Element(c => ComposeHeader(c, invoice));
-                page.Content().Element(c => ComposeContent(c, invoice, qrPng));
-                page.Footer().AlignCenter().Text(text =>
-                {
-                    text.Span("Fakturio · strana ");
-                    text.CurrentPageNumber();
-                    text.Span(" / ");
-                    text.TotalPages();
-                });
+                page.Content().Element(c => ComposePage(c, invoice, bankName, footerNote, qr));
             });
         }).GeneratePdf();
 
@@ -61,239 +68,326 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         return ServiceResult<InvoicePdfFile>.Ok(new InvoicePdfFile(bytes, fileName));
     }
 
-    private static void ComposeHeader(IContainer container, Invoice invoice)
+    private static void ComposePage(
+        IContainer container,
+        Invoice invoice,
+        string? bankName,
+        string? footerNote,
+        PaymentQrResult? qr)
     {
         container.Column(col =>
         {
+            col.Spacing(0);
+
+            // —— Header: Dodávateľ | Faktúra č. ——
             col.Item().Row(row =>
             {
                 row.RelativeItem().Column(left =>
                 {
-                    left.Item().Text(invoice.SellerName ?? "Dodávateľ")
-                        .FontSize(16).SemiBold().FontColor(Colors.Blue.Darken3);
-                    if (!string.IsNullOrWhiteSpace(invoice.SellerIco))
-                        left.Item().Text($"IČO: {invoice.SellerIco}");
-                    if (!string.IsNullOrWhiteSpace(invoice.SellerDic))
-                        left.Item().Text($"DIČ: {invoice.SellerDic}");
-                    if (invoice.SellerIsVatPayer)
-                    {
-                        if (!string.IsNullOrWhiteSpace(invoice.SellerIcDph))
-                            left.Item().Text($"IČ DPH: {invoice.SellerIcDph}");
-                    }
-                    else
-                    {
-                        left.Item().Text("Nie som platca DPH").FontSize(9).FontColor(Colors.Grey.Darken1);
-                    }
-                    left.Item().Text(FormatAddress(
+                    left.Item().Text("DODÁVATEĽ")
+                        .FontSize(8).FontColor(Muted).LetterSpacing(0.04f);
+                    left.Item().PaddingTop(2).Text(invoice.SellerName ?? "—")
+                        .FontSize(13).SemiBold().FontColor(Ink);
+                    left.Item().PaddingTop(4).Element(c => AddressBlock(c,
                         invoice.SellerStreet, invoice.SellerCity,
                         invoice.SellerPostalCode, invoice.SellerCountry));
+                    left.Item().PaddingTop(6).Element(c => IdLines(c,
+                        invoice.SellerIco, invoice.SellerDic, invoice.SellerIcDph,
+                        invoice.SellerIsVatPayer));
                 });
 
                 row.ConstantItem(220).AlignRight().Column(right =>
                 {
-                    right.Item().Text(DocumentTitle(invoice.DocumentType))
-                        .FontSize(22).Bold().FontColor(Colors.Blue.Darken3);
-                    right.Item().Text($"č. {invoice.Number}").FontSize(14).SemiBold();
+                    right.Item().Text($"{DocumentTitle(invoice.DocumentType)} {invoice.Number}")
+                        .FontSize(16).Bold().FontColor(Accent);
                     if (!string.IsNullOrWhiteSpace(invoice.RelatedInvoiceNumber))
                     {
                         right.Item().PaddingTop(2)
                             .Text($"K dokladu: {invoice.RelatedInvoiceNumber}")
-                            .FontSize(9).FontColor(Colors.Grey.Darken1);
+                            .FontSize(8).FontColor(Muted);
                     }
-                    right.Item().PaddingTop(6).Text($"Stav: {StatusLabel(invoice.Status)}");
+                    right.Item().PaddingTop(8).Text(StatusLabel(invoice.Status))
+                        .FontSize(9).FontColor(Muted);
                 });
             });
 
-            col.Item().PaddingVertical(12).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
-        });
-    }
+            col.Item().PaddingTop(10).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten2);
 
-    private static void ComposeContent(IContainer container, Invoice invoice, byte[]? qrPng)
-    {
-        container.Column(col =>
-        {
-            col.Spacing(12);
-
-            col.Item().Row(row =>
+            // —— Banka + odberateľ + dátumy ——
+            col.Item().PaddingTop(10).Row(row =>
             {
-                row.RelativeItem().Element(c => PartyBox(c, "Odberateľ",
-                    invoice.CustomerName,
-                    invoice.CustomerIco,
-                    invoice.CustomerDic,
-                    invoice.CustomerIcDph,
-                    FormatAddress(
-                        invoice.CustomerStreet, invoice.CustomerCity,
-                        invoice.CustomerPostalCode, invoice.CustomerCountry),
-                    invoice.CustomerEmail));
+                row.RelativeItem().Column(left =>
+                {
+                    if (!string.IsNullOrWhiteSpace(bankName) || !string.IsNullOrWhiteSpace(invoice.BankIban))
+                    {
+                        left.Item().Text(bankName ?? "Banka")
+                            .FontSize(9).SemiBold();
+                        if (!string.IsNullOrWhiteSpace(invoice.BankIban))
+                            left.Item().Text($"IBAN: {FormatIban(invoice.BankIban)}").FontSize(9);
+                        if (!string.IsNullOrWhiteSpace(invoice.BankBic))
+                            left.Item().Text($"SWIFT: {invoice.BankBic}").FontSize(9);
+                        if (!string.IsNullOrWhiteSpace(invoice.VariableSymbol))
+                            left.Item().Text($"Variabilný symbol: {invoice.VariableSymbol}").FontSize(9);
+                    }
 
-                row.ConstantItem(16);
-                row.RelativeItem().Element(c => MetaBox(c, invoice));
+                    left.Item().PaddingTop(12).Text("ODBERATEĽ")
+                        .FontSize(8).FontColor(Muted).LetterSpacing(0.04f);
+                    left.Item().PaddingTop(2).Text(invoice.CustomerName)
+                        .FontSize(12).SemiBold();
+                    left.Item().PaddingTop(4).Element(c => AddressBlock(c,
+                        invoice.CustomerStreet, invoice.CustomerCity,
+                        invoice.CustomerPostalCode, invoice.CustomerCountry));
+                    left.Item().PaddingTop(6).Element(c => IdLines(c,
+                        invoice.CustomerIco, invoice.CustomerDic, invoice.CustomerIcDph,
+                        vatPayerHint: null));
+                });
+
+                row.ConstantItem(200).AlignRight().Column(dates =>
+                {
+                    DateRow(dates, "Dátum vystavenia", invoice.IssueDate);
+                    DateRow(dates, "Dátum dodania", invoice.DeliveryDate ?? invoice.IssueDate);
+                    DateRow(dates, "Dátum splatnosti", invoice.DueDate);
+                    if (invoice.PaidAt.HasValue)
+                        DateRow(dates, "Zaplatené", invoice.PaidAt.Value);
+                });
             });
 
-            var showVat = invoice.SellerIsVatPayer;
+            col.Item().PaddingTop(14).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten2);
 
-            col.Item().Table(table =>
+            // —— Položky ——
+            var showVat = invoice.SellerIsVatPayer;
+            col.Item().PaddingTop(10).Table(table =>
             {
                 table.ColumnsDefinition(columns =>
                 {
-                    columns.ConstantColumn(24);
-                    columns.RelativeColumn(3);
-                    columns.RelativeColumn();
-                    columns.RelativeColumn();
-                    columns.RelativeColumn();
-                    if (showVat)
-                        columns.RelativeColumn();
-                    columns.RelativeColumn();
+                    columns.RelativeColumn(3.2f);
+                    columns.ConstantColumn(48);
+                    columns.ConstantColumn(52);
+                    columns.RelativeColumn(1.2f);
+                    if (showVat) columns.ConstantColumn(44);
+                    columns.RelativeColumn(1.2f);
                 });
 
                 table.Header(header =>
                 {
-                    header.Cell().Element(HeaderCell).Text("#");
-                    header.Cell().Element(HeaderCell).Text("Popis");
-                    header.Cell().Element(HeaderCell).AlignRight().Text("Množ.");
-                    header.Cell().Element(HeaderCell).AlignRight().Text("MJ");
-                    header.Cell().Element(HeaderCell).AlignRight().Text("Cena");
+                    header.Cell().Element(TableHeader).Text("NÁZOV A POPIS POLOŽKY");
+                    header.Cell().Element(TableHeader).AlignRight().Text("POČET");
+                    header.Cell().Element(TableHeader).AlignRight().Text("JEDNOTKA");
+                    header.Cell().Element(TableHeader).AlignRight().Text("JEDN. CENA");
                     if (showVat)
-                        header.Cell().Element(HeaderCell).AlignRight().Text("DPH %");
-                    header.Cell().Element(HeaderCell).AlignRight().Text("Spolu");
+                        header.Cell().Element(TableHeader).AlignRight().Text("DPH %");
+                    header.Cell().Element(TableHeader).AlignRight().Text("CELKOM");
                 });
 
-                var index = 1;
                 foreach (var item in invoice.Items.OrderBy(i => i.SortOrder))
                 {
-                    table.Cell().Element(BodyCell).Text(index++.ToString());
-                    table.Cell().Element(BodyCell).Text(item.Description);
-                    table.Cell().Element(BodyCell).AlignRight().Text(item.Quantity.ToString("0.####"));
-                    table.Cell().Element(BodyCell).AlignRight().Text(item.Unit);
-                    table.Cell().Element(BodyCell).AlignRight().Text(Money(item.UnitPrice, invoice.Currency));
+                    table.Cell().Element(TableBody).Text(item.Description);
+                    table.Cell().Element(TableBody).AlignRight()
+                        .Text(item.Quantity.ToString("0.####"));
+                    table.Cell().Element(TableBody).AlignRight().Text(item.Unit);
+                    table.Cell().Element(TableBody).AlignRight()
+                        .Text(Money(item.UnitPrice, invoice.Currency));
                     if (showVat)
-                        table.Cell().Element(BodyCell).AlignRight().Text($"{item.VatRate:0.##}");
-                    table.Cell().Element(BodyCell).AlignRight().Text(Money(item.Total, invoice.Currency));
+                        table.Cell().Element(TableBody).AlignRight()
+                            .Text($"{item.VatRate:0.##}");
+                    table.Cell().Element(TableBody).AlignRight()
+                        .Text(Money(item.Total, invoice.Currency));
                 }
             });
 
-            col.Item().Row(row =>
+            col.Item().PaddingTop(6).LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten2);
+
+            // —— Poznámka + QR + suma + podpis ——
+            col.Item().PaddingTop(12).Row(row =>
             {
-                row.RelativeItem().Column(payment =>
+                row.RelativeItem().Column(left =>
                 {
-                    if (qrPng is { Length: > 0 })
+                    var note = BuildNote(invoice);
+                    if (!string.IsNullOrWhiteSpace(note))
                     {
-                        payment.Item().Text("Platba QR (EPC)").SemiBold().FontSize(9);
-                        payment.Item().Width(110).Height(110).Image(qrPng);
-                        payment.Item().PaddingTop(2).Text("Naskenuj v bankovej appke")
-                            .FontSize(8).FontColor(Colors.Grey.Darken1);
+                        left.Item().Text("Poznámka").FontSize(8).FontColor(Muted);
+                        left.Item().PaddingTop(2).Text(note).FontSize(9);
+                    }
+
+                    if (qr is not null)
+                    {
+                        left.Item().PaddingTop(10).Row(qrRow =>
+                        {
+                            qrRow.ConstantItem(108).Column(q =>
+                            {
+                                q.Item().Width(100).Height(100).Image(qr.Png);
+                            });
+                            qrRow.RelativeItem().PaddingLeft(8).AlignMiddle().Column(lbl =>
+                            {
+                                lbl.Item().Text(qr.Label).SemiBold().FontSize(10);
+                                lbl.Item().PaddingTop(2)
+                                    .Text("Naskenuj v bankovej aplikácii")
+                                    .FontSize(8).FontColor(Muted);
+                            });
+                        });
                     }
                 });
 
-                row.ConstantItem(220).Column(totals =>
+                row.ConstantItem(200).Column(right =>
                 {
                     if (showVat)
                     {
-                        totals.Item().Row(r =>
-                        {
-                            r.RelativeItem().Text("Základ:");
-                            r.ConstantItem(100).AlignRight().Text(Money(invoice.Subtotal, invoice.Currency));
-                        });
-                        totals.Item().Row(r =>
-                        {
-                            r.RelativeItem().Text("DPH:");
-                            r.ConstantItem(100).AlignRight().Text(Money(invoice.VatTotal, invoice.Currency));
-                        });
+                        TotalsRow(right, "Základ", Money(invoice.Subtotal, invoice.Currency));
+                        TotalsRow(right, "DPH", Money(invoice.VatTotal, invoice.Currency));
                     }
 
-                    totals.Item().PaddingTop(showVat ? 4 : 0).Row(r =>
+                    right.Item().PaddingTop(4).AlignRight().Text("Celková suma")
+                        .FontSize(9).FontColor(Muted);
+                    right.Item().AlignRight().Text(Money(invoice.Total, invoice.Currency))
+                        .FontSize(16).Bold().FontColor(Accent);
+
+                    right.Item().PaddingTop(18).AlignCenter().Column(sig =>
                     {
-                        r.RelativeItem().Text("Celkom:").SemiBold().FontSize(12);
-                        r.ConstantItem(100).AlignRight().Text(Money(invoice.Total, invoice.Currency))
-                            .SemiBold().FontSize(12);
+                        sig.Item().Height(48);
+                        sig.Item().LineHorizontal(0.5f).LineColor(Colors.Grey.Lighten1);
+                        sig.Item().PaddingTop(4).AlignCenter()
+                            .Text("Podpis a pečiatka")
+                            .FontSize(8).FontColor(Muted);
                     });
                 });
             });
 
-            if (!string.IsNullOrWhiteSpace(invoice.Notes))
+            if (!string.IsNullOrWhiteSpace(footerNote))
             {
-                col.Item().PaddingTop(8).Column(notes =>
-                {
-                    notes.Item().Text("Poznámka").SemiBold();
-                    notes.Item().Text(invoice.Notes);
-                });
+                col.Item().PaddingTop(10).Text(footerNote).FontSize(8).FontColor(Muted);
             }
 
             if (invoice.Status == InvoiceStatus.Cancelled && !string.IsNullOrWhiteSpace(invoice.CancelReason))
             {
-                col.Item().Background(Colors.Red.Lighten4).Padding(8).Text(
-                    $"Zrušená: {invoice.CancelReason} ({invoice.CancelledAt:dd.MM.yyyy})");
+                col.Item().PaddingTop(8).Background(Colors.Red.Lighten4).Padding(8)
+                    .Text($"Zrušená: {invoice.CancelReason} ({invoice.CancelledAt:dd.MM.yyyy})");
             }
+
+            // —— Platobný pás ——
+            col.Item().PaddingTop(16).Element(c => PaymentStrip(c, invoice));
         });
     }
 
-    private static void PartyBox(
+    private static void PaymentStrip(IContainer container, Invoice invoice)
+    {
+        container.Background(AccentSoft).Padding(10).Row(row =>
+        {
+            StripCell(row, "IBAN", string.IsNullOrWhiteSpace(invoice.BankIban)
+                ? "—"
+                : FormatIban(invoice.BankIban!));
+            StripCell(row, "Variabilný symbol",
+                string.IsNullOrWhiteSpace(invoice.VariableSymbol) ? "—" : invoice.VariableSymbol!);
+            StripCell(row, "Dátum splatnosti", invoice.DueDate.ToString("dd.MM.yyyy"));
+            StripCell(row, "Suma na úhradu", Money(invoice.Total, invoice.Currency), emphasize: true);
+        });
+    }
+
+    private static void StripCell(RowDescriptor row, string label, string value, bool emphasize = false)
+    {
+        row.RelativeItem().PaddingHorizontal(6).Column(col =>
+        {
+            col.Item().Text(label).FontSize(7.5f).FontColor(Muted);
+            col.Item().PaddingTop(2).Text(value)
+                .FontSize(emphasize ? 11 : 9)
+                .SemiBold()
+                .FontColor(emphasize ? Accent : Ink);
+        });
+    }
+
+    private static void DateRow(ColumnDescriptor col, string label, DateOnly date)
+    {
+        col.Item().PaddingBottom(3).Row(r =>
+        {
+            r.RelativeItem().AlignRight().Text(label).FontSize(9).FontColor(Muted);
+            r.ConstantItem(8);
+            r.ConstantItem(72).AlignRight().Text(date.ToString("dd.MM.yyyy"))
+                .FontSize(9).SemiBold();
+        });
+    }
+
+    private static void TotalsRow(ColumnDescriptor col, string label, string value)
+    {
+        col.Item().Row(r =>
+        {
+            r.RelativeItem().AlignRight().Text(label).FontSize(9).FontColor(Muted);
+            r.ConstantItem(90).AlignRight().Text(value)
+                .FontSize(9).SemiBold();
+        });
+    }
+
+    private static void IdLines(
         IContainer container,
-        string title,
-        string name,
         string? ico,
         string? dic,
         string? icDph,
-        string address,
-        string? email)
+        bool? vatPayerHint)
     {
-        container.Border(1).BorderColor(Colors.Grey.Lighten2).Padding(10).Column(col =>
+        container.Column(col =>
         {
-            col.Item().Text(title).FontSize(9).FontColor(Colors.Grey.Darken1);
-            col.Item().Text(name).SemiBold();
-            if (!string.IsNullOrWhiteSpace(ico)) col.Item().Text($"IČO: {ico}");
-            if (!string.IsNullOrWhiteSpace(dic)) col.Item().Text($"DIČ: {dic}");
-            if (!string.IsNullOrWhiteSpace(icDph)) col.Item().Text($"IČ DPH: {icDph}");
-            if (!string.IsNullOrWhiteSpace(address)) col.Item().Text(address);
-            if (!string.IsNullOrWhiteSpace(email)) col.Item().Text(email);
+            if (!string.IsNullOrWhiteSpace(ico))
+                col.Item().Text($"IČO: {ico}").FontSize(9);
+            if (!string.IsNullOrWhiteSpace(dic))
+                col.Item().Text($"DIČ: {dic}").FontSize(9);
+            if (vatPayerHint == true && !string.IsNullOrWhiteSpace(icDph))
+                col.Item().Text($"IČ DPH: {icDph}").FontSize(9);
+            else if (vatPayerHint == false)
+                col.Item().Text("Nie sme platiteľmi DPH").FontSize(8).FontColor(Muted);
+            else if (!string.IsNullOrWhiteSpace(icDph))
+                col.Item().Text($"IČ DPH: {icDph}").FontSize(9);
         });
     }
 
-    private static void MetaBox(IContainer container, Invoice invoice)
+    private static string BuildNote(Invoice invoice)
     {
-        container.Border(1).BorderColor(Colors.Grey.Lighten2).Padding(10).Column(col =>
-        {
-            Meta(col, "Dátum vystavenia", invoice.IssueDate.ToString("dd.MM.yyyy"));
-            Meta(col, "Dátum splatnosti", invoice.DueDate.ToString("dd.MM.yyyy"));
-            if (invoice.DeliveryDate.HasValue)
-                Meta(col, "Dátum dodania", invoice.DeliveryDate.Value.ToString("dd.MM.yyyy"));
-            if (invoice.PaidAt.HasValue)
-                Meta(col, "Zaplatené", invoice.PaidAt.Value.ToString("dd.MM.yyyy"));
-            if (!string.IsNullOrWhiteSpace(invoice.VariableSymbol))
-                Meta(col, "VS", invoice.VariableSymbol);
-            if (!string.IsNullOrWhiteSpace(invoice.BankIban))
-                Meta(col, "IBAN", invoice.BankIban);
-            if (!string.IsNullOrWhiteSpace(invoice.BankBic))
-                Meta(col, "BIC", invoice.BankBic);
-            Meta(col, "Platba", invoice.PaymentMethod ?? "bank_transfer");
-        });
+        var parts = new List<string>();
+        if (!invoice.SellerIsVatPayer)
+            parts.Add("Nie sme platiteľmi DPH.");
+        if (!string.IsNullOrWhiteSpace(invoice.Notes))
+            parts.Add(invoice.Notes.Trim());
+        return string.Join(" ", parts);
     }
 
-    private static void Meta(ColumnDescriptor col, string label, string value)
-    {
-        col.Item().Row(row =>
-        {
-            row.RelativeItem().Text(label).FontColor(Colors.Grey.Darken1);
-            row.RelativeItem().AlignRight().Text(value).SemiBold();
-        });
-    }
+    private static IContainer TableHeader(IContainer container) =>
+        container.DefaultTextStyle(x => x.FontSize(7.5f).SemiBold().FontColor(Muted))
+            .Background(HeaderGray)
+            .PaddingVertical(6)
+            .PaddingHorizontal(5);
 
-    private static IContainer HeaderCell(IContainer container) =>
-        container.DefaultTextStyle(x => x.SemiBold().FontColor(Colors.White))
-            .Background(Colors.Blue.Darken3)
-            .Padding(5);
-
-    private static IContainer BodyCell(IContainer container) =>
-        container.BorderBottom(1).BorderColor(Colors.Grey.Lighten3).PaddingVertical(5).PaddingHorizontal(4);
+    private static IContainer TableBody(IContainer container) =>
+        container.BorderBottom(0.5f).BorderColor(Colors.Grey.Lighten3)
+            .PaddingVertical(7).PaddingHorizontal(5)
+            .DefaultTextStyle(x => x.FontSize(9));
 
     private static string Money(decimal value, string currency) =>
-        $"{value:0.00} {currency}";
+        $"{value.ToString("N2", CultureInfoSk)} {currency}";
 
-    private static string FormatAddress(string? street, string? city, string? postal, string? country)
+    private static readonly System.Globalization.CultureInfo CultureInfoSk =
+        System.Globalization.CultureInfo.GetCultureInfo("sk-SK");
+
+    private static string FormatIban(string iban)
     {
-        var parts = new[] { street, $"{postal} {city}".Trim(), country }
-            .Where(p => !string.IsNullOrWhiteSpace(p));
-        return string.Join(", ", parts);
+        var clean = new string(iban.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
+        return string.Join(' ', Enumerable.Range(0, (clean.Length + 3) / 4)
+            .Select(i => clean.Substring(i * 4, Math.Min(4, clean.Length - i * 4))));
+    }
+
+    private static void AddressBlock(
+        IContainer container,
+        string? street,
+        string? city,
+        string? postal,
+        string? country)
+    {
+        container.Column(col =>
+        {
+            if (!string.IsNullOrWhiteSpace(street))
+                col.Item().Text(street!).FontSize(9);
+            var cityLine = $"{postal} {city}".Trim();
+            if (!string.IsNullOrWhiteSpace(cityLine))
+                col.Item().Text(cityLine).FontSize(9);
+            if (!string.IsNullOrWhiteSpace(country) && country is not "SK")
+                col.Item().Text(country!).FontSize(9);
+        });
     }
 
     private static string StatusLabel(InvoiceStatus status) => status switch
@@ -308,8 +402,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
 
     private static string DocumentTitle(InvoiceDocumentType type) => type switch
     {
-        InvoiceDocumentType.Proforma => "ZÁLOHOVÁ FAKTÚRA",
-        InvoiceDocumentType.CreditNote => "DOBROPIS",
-        _ => "FAKTÚRA"
+        InvoiceDocumentType.Proforma => "Zálohová faktúra",
+        InvoiceDocumentType.CreditNote => "Dobropis",
+        _ => "Faktúra"
     };
 }
