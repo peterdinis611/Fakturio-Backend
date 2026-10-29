@@ -31,6 +31,9 @@ public class ServiceResult
 
     public static ServiceResult BadRequest(string error, string errorCode = ErrorCodes.BadRequest) =>
         Fail(error, StatusCodes.Status400BadRequest, errorCode);
+
+    public static ServiceResult Unauthorized(string error, string errorCode = ErrorCodes.Unauthorized) =>
+        Fail(error, StatusCodes.Status401Unauthorized, errorCode);
 }
 
 public class ServiceResult<T> : ServiceResult
@@ -62,4 +65,7 @@ public class ServiceResult<T> : ServiceResult
 
     public new static ServiceResult<T> BadRequest(string error, string errorCode = ErrorCodes.BadRequest) =>
         Fail(error, StatusCodes.Status400BadRequest, errorCode);
+
+    public new static ServiceResult<T> Unauthorized(string error, string errorCode = ErrorCodes.Unauthorized) =>
+        Fail(error, StatusCodes.Status401Unauthorized, errorCode);
 }

@@ -1,8 +1,11 @@
 using Fakturio.Api.Caching;
 using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
+using Fakturio.Api.Models;
 using Fakturio.Api.Services.Audit;
+using Fakturio.Api.Services.Auth;
 using Fakturio.Api.Services.Company;
+using Microsoft.AspNetCore.Identity;
 using Fakturio.Api.Services.Customers;
 using Fakturio.Api.Services.Exports;
 using Fakturio.Api.Services.Invoices;
@@ -53,6 +56,9 @@ public static class DependencyInjection
         services.AddScoped<IPaymentImportService, PaymentImportService>();
         services.AddScoped<IResumeService, ResumeService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
+        services.AddSingleton<JwtTokenService>();
+        services.AddScoped<IAuthService, AuthService>();
 
         return services;
     }

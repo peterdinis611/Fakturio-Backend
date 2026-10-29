@@ -82,7 +82,7 @@ public sealed class AuditLogService(
             EntityId = entityId,
             EntityNumber = entityNumber,
             ActorUserId = actor.UserId,
-            ActorClerkUserId = actor.ClerkUserId,
+            ActorClerkUserId = actor.Subject,
             ActorDisplayName = actor.DisplayName,
             ActorEmail = actor.Email,
             Summary = summary.Trim(),

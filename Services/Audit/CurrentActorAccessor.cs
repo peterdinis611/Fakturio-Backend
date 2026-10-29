@@ -17,27 +17,23 @@ public sealed class CurrentActorAccessor(
 
     public async Task<AuditActor> GetAsync(CancellationToken ct = default)
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        if (user?.Identity?.IsAuthenticated != true)
+        var principal = httpContextAccessor.HttpContext?.User;
+        if (principal?.Identity?.IsAuthenticated != true)
             return System;
 
-        var clerkId = user.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? user.FindFirstValue("sub");
-
-        if (string.IsNullOrWhiteSpace(clerkId))
+        var rawId = principal.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? principal.FindFirstValue("sub");
+        if (!Guid.TryParse(rawId, out var userId))
             return System;
 
         var appUser = await db.Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.ClerkUserId == clerkId, ct);
+            .FirstOrDefaultAsync(u => u.Id == userId, ct);
 
         if (appUser is null)
         {
-            var email = user.FindFirstValue(ClaimTypes.Email)
-                ?? user.FindFirstValue("email");
-            var name = user.FindFirstValue("name")
-                ?? email
-                ?? clerkId;
-            return new AuditActor(null, clerkId, name, email);
+            var email = principal.FindFirstValue(ClaimTypes.Email)
+                ?? principal.FindFirstValue("email");
+            return new AuditActor(userId, userId.ToString(), email ?? userId.ToString(), email);
         }
 
         var display = string.Join(
@@ -47,11 +43,11 @@ public sealed class CurrentActorAccessor(
             .Trim();
 
         if (string.IsNullOrWhiteSpace(display))
-            display = appUser.Email ?? appUser.ClerkUserId;
+            display = appUser.Email;
 
         return new AuditActor(
             appUser.Id,
-            appUser.ClerkUserId,
+            appUser.Id.ToString(),
             display,
             appUser.Email);
     }

@@ -2,7 +2,7 @@ namespace Fakturio.Api.Interfaces;
 
 public record AuditActor(
     Guid? UserId,
-    string? ClerkUserId,
+    string? Subject,
     string? DisplayName,
     string? Email);
 

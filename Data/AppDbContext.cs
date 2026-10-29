@@ -176,13 +176,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<AppUser>(entity =>
         {
             entity.HasKey(u => u.Id);
-            entity.Property(u => u.ClerkUserId).HasMaxLength(128).IsRequired();
-            entity.Property(u => u.Email).HasMaxLength(200);
+            entity.Property(u => u.Email).HasMaxLength(200).IsRequired();
+            entity.Property(u => u.PasswordHash).HasMaxLength(500).IsRequired();
             entity.Property(u => u.FirstName).HasMaxLength(100);
             entity.Property(u => u.LastName).HasMaxLength(100);
             entity.Property(u => u.ImageUrl).HasMaxLength(500);
-            entity.HasIndex(u => u.ClerkUserId).IsUnique();
-            entity.HasIndex(u => u.Email);
+            entity.HasIndex(u => u.Email).IsUnique();
         });
 
         modelBuilder.Entity<AuditLogEntry>(entity =>

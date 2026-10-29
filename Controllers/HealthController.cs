@@ -1,7 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
 
+[AllowAnonymous]
 [Route("api/health")]
 public sealed class HealthController : ApiControllerBase
 {
