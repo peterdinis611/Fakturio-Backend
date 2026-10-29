@@ -21,17 +21,17 @@ public sealed class AuthService(
     {
         var email = NormalizeEmail(request.Email);
         if (email is null)
-            return ServiceResult<AuthResponse>.BadRequest("Email is required.", ErrorCodes.BadRequest);
+            return ServiceResult<AuthResponse>.BadRequest("E-mail je povinný.", ErrorCodes.BadRequest);
 
         if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
             return ServiceResult<AuthResponse>.BadRequest(
-                "Password must be at least 8 characters.",
+                "Heslo musí mať aspoň 8 znakov.",
                 ErrorCodes.BadRequest);
 
         var exists = await db.Users.AnyAsync(u => u.Email == email, ct);
         if (exists)
             return ServiceResult<AuthResponse>.Conflict(
-                "An account with this email already exists.",
+                "Účet s týmto e-mailom už existuje.",
                 ErrorCodes.DuplicateEmail);
 
         var user = new AppUser
@@ -58,19 +58,19 @@ public sealed class AuthService(
         var email = NormalizeEmail(request.Email);
         if (email is null || string.IsNullOrWhiteSpace(request.Password))
             return ServiceResult<AuthResponse>.BadRequest(
-                "Email and password are required.",
+                "E-mail a heslo sú povinné.",
                 ErrorCodes.BadRequest);
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
         if (user is null)
             return ServiceResult<AuthResponse>.Unauthorized(
-                "Invalid email or password.",
+                "Neplatný e-mail alebo heslo.",
                 ErrorCodes.Unauthorized);
 
         var result = passwordHasher.VerifyHashedPassword(user, user.PasswordHash, request.Password);
         if (result == PasswordVerificationResult.Failed)
             return ServiceResult<AuthResponse>.Unauthorized(
-                "Invalid email or password.",
+                "Neplatný e-mail alebo heslo.",
                 ErrorCodes.Unauthorized);
 
         if (result == PasswordVerificationResult.SuccessRehashNeeded)
