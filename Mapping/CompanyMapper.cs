@@ -61,26 +61,26 @@ public static class CompanyMapper
     {
         var items = new List<CompanyCompletenessItem>
         {
-            Item("name", "Company name", true, !string.IsNullOrWhiteSpace(c.Name),
-                "Set the legal company name shown on invoices."),
+            Item("name", "Názov firmy", true, !string.IsNullOrWhiteSpace(c.Name),
+                "Oficiálny názov, ktorý ide na faktúry."),
             Item("ico", "IČO", true, !string.IsNullOrWhiteSpace(c.Ico),
-                "Slovak company identification number."),
-            Item("address", "Address", true,
+                "Identifikačné číslo organizácie."),
+            Item("address", "Adresa", true,
                 !string.IsNullOrWhiteSpace(c.Street) && !string.IsNullOrWhiteSpace(c.City) && !string.IsNullOrWhiteSpace(c.PostalCode),
-                "Street, city and postal code are required."),
-            Item("email", "Email", true, !string.IsNullOrWhiteSpace(c.Email),
-                "Contact email for the company profile."),
-            Item("iban", "Bank IBAN", true, !string.IsNullOrWhiteSpace(c.BankIban),
-                "IBAN is used as the default payment account on invoices."),
+                "Ulica, mesto a PSČ sú povinné."),
+            Item("email", "E-mail", true, !string.IsNullOrWhiteSpace(c.Email),
+                "Kontaktný e-mail firmy."),
+            Item("iban", "IBAN", true, !string.IsNullOrWhiteSpace(c.BankIban),
+                "Predvolený účet na faktúrach."),
             Item("dic", "DIČ", false, !string.IsNullOrWhiteSpace(c.Dic),
-                "Recommended for Slovak businesses."),
+                "Odporúčané pre SK firmu."),
             Item("ic_dph", "IČ DPH", c.IsVatPayer, !string.IsNullOrWhiteSpace(c.IcDph),
-                c.IsVatPayer ? "Required when the company is a VAT payer." : "Optional when not a VAT payer."),
-            Item("payment_method", "Default payment method", false,
+                c.IsVatPayer ? "Povinné pri platcovi DPH." : "Voliteľné pri neplatcovi DPH."),
+            Item("payment_method", "Spôsob platby", false,
                 !string.IsNullOrWhiteSpace(c.DefaultPaymentMethod),
-                "Usually bank_transfer."),
-            Item("footer", "Invoice footer", false, !string.IsNullOrWhiteSpace(c.InvoiceFooter),
-                "Optional legal / thank-you text under the invoice.")
+                "Zvyčajne bankový prevod."),
+            Item("footer", "Pätička faktúry", false, !string.IsNullOrWhiteSpace(c.InvoiceFooter),
+                "Voliteľný právny / poďakovací text.")
         };
 
         var required = items.Where(i => i.IsRequired).ToList();

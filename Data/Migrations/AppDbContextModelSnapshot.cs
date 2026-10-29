@@ -692,8 +692,42 @@ namespace Fakturio.Api.Data.Migrations
                     b.ToTable("ResumeEntries");
                 });
 
-            modelBuilder.Entity("Fakturio.Api.Models.AppUser", b =>
+            modelBuilder.Entity("Fakturio.Api.Models.Note", b =>
                 {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(8000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("IsPinned");
+
+                    b.HasIndex("UpdatedAt");
+
+                    b.ToTable("Notes");
+                });
+
+            modelBuilder.Entity("Fakturio.Api.Models.AppUser", b =>
+            {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");

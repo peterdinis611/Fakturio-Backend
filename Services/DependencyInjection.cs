@@ -10,6 +10,7 @@ using Fakturio.Api.Services.Customers;
 using Fakturio.Api.Services.Exports;
 using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Jobs;
+using Fakturio.Api.Services.Notes;
 using Fakturio.Api.Services.Payments;
 using Fakturio.Api.Services.Reminders;
 using Fakturio.Api.Services.Reports;
@@ -55,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
         services.AddScoped<IPaymentImportService, PaymentImportService>();
         services.AddScoped<IResumeService, ResumeService>();
+        services.AddScoped<INoteService, NoteService>();
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddSingleton<JwtTokenService>();

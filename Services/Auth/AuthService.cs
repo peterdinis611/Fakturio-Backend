@@ -23,9 +23,9 @@ public sealed class AuthService(
         if (email is null)
             return ServiceResult<AuthResponse>.BadRequest("E-mail je povinný.", ErrorCodes.BadRequest);
 
-        if (string.IsNullOrWhiteSpace(request.Password) || request.Password.Length < 8)
+        if (string.IsNullOrWhiteSpace(request.Password) || !IsStrongPassword(request.Password))
             return ServiceResult<AuthResponse>.BadRequest(
-                "Heslo musí mať aspoň 8 znakov.",
+                "Heslo musí mať aspoň 8 znakov, veľké a malé písmeno a špeciálny znak.",
                 ErrorCodes.BadRequest);
 
         var exists = await db.Users.AnyAsync(u => u.Email == email, ct);
@@ -103,4 +103,19 @@ public sealed class AuthService(
 
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static bool IsStrongPassword(string password)
+    {
+        if (password.Length < 8) return false;
+        var hasUpper = false;
+        var hasLower = false;
+        var hasSpecial = false;
+        foreach (var c in password)
+        {
+            if (char.IsUpper(c)) hasUpper = true;
+            else if (char.IsLower(c)) hasLower = true;
+            else if (!char.IsLetterOrDigit(c)) hasSpecial = true;
+        }
+        return hasUpper && hasLower && hasSpecial;
+    }
 }

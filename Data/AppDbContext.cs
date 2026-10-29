@@ -14,6 +14,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<ResumeEntry> ResumeEntries => Set<ResumeEntry>();
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
+    public DbSet<Note> Notes => Set<Note>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -197,6 +198,15 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(a => a.OccurredAt);
             entity.HasIndex(a => a.Action);
             entity.HasIndex(a => a.EntityId);
+        });
+
+        modelBuilder.Entity<Note>(entity =>
+        {
+            entity.HasKey(n => n.Id);
+            entity.Property(n => n.Title).HasMaxLength(200).IsRequired();
+            entity.Property(n => n.Body).HasMaxLength(8000);
+            entity.HasIndex(n => n.IsPinned);
+            entity.HasIndex(n => n.UpdatedAt);
         });
     }
 }
