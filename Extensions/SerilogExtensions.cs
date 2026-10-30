@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Fakturio.Api.Middleware;
 using Serilog;
 using Serilog.Events;
 
@@ -20,7 +21,7 @@ public static class SerilogExtensions
         return app.UseSerilogRequestLogging(options =>
         {
             options.MessageTemplate =
-                "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms TraceId={TraceId} UserId={UserId}";
+                "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000} ms CorrelationId={CorrelationId} UserId={UserId}";
             options.GetLevel = (httpContext, _, exception) =>
             {
                 if (exception is not null || httpContext.Response.StatusCode >= StatusCodes.Status500InternalServerError)
@@ -37,7 +38,11 @@ public static class SerilogExtensions
             };
             options.EnrichDiagnosticContext = (diagnosticContext, httpContext) =>
             {
-                diagnosticContext.Set("TraceId", httpContext.TraceIdentifier);
+                var correlationId = httpContext.Items.TryGetValue(CorrelationIdMiddleware.ItemKey, out var value)
+                    && value is string id
+                        ? id
+                        : httpContext.TraceIdentifier;
+                diagnosticContext.Set("CorrelationId", correlationId);
 
                 var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
                     ?? httpContext.User.FindFirstValue("sub");

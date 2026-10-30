@@ -51,7 +51,7 @@ try
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
-    builder.Services.AddOpenApi();
+    builder.Services.AddFakturioOpenApi();
     builder.Services.AddProblemDetails();
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
     builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerRequestValidator>();
@@ -81,9 +81,10 @@ try
 
     if (app.Environment.IsDevelopment())
     {
-        app.MapOpenApi();
+        app.MapFakturioOpenApi();
     }
 
+    app.UseFakturioMiddleware();
     app.UseFakturioRequestLogging();
     app.UseExceptionHandler();
     app.UseCors();
