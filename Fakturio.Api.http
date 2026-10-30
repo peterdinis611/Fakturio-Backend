@@ -167,3 +167,9 @@ GET {{host}}/api/search/invoices?q=2026&page=1&pageSize=20
 
 ### Search – validation (too short)
 GET {{host}}/api/search?q=a
+
+### Registry – Slovakia (RPO) by IČO
+GET {{host}}/api/registry/SK/35763469
+
+### Registry – Czechia (ARES) by IČO
+GET {{host}}/api/registry/CZ/27074358

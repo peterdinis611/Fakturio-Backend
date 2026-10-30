@@ -30,4 +30,9 @@ public static class ErrorCodes
     public const string InvalidInvoiceItems = "invalid_invoice_items";
     public const string DuplicateEmail = "duplicate_email";
     public const string EmptyGuid = "empty_guid";
+
+    public const string InvalidIco = "invalid_ico";
+    public const string UnsupportedCountry = "unsupported_country";
+    public const string RegistryNotFound = "registry_not_found";
+    public const string RegistryUnavailable = "registry_unavailable";
 }
