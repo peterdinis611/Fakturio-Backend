@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Exports;
 
-public class CsvExportService(AppDbContext db) : IExportService
+public class CsvExportService(AppDbContext db, ITenantContext tenant) : IExportService
 {
     private static readonly CultureInfo Sk = CultureInfo.GetCultureInfo("sk-SK");
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -25,7 +25,7 @@ public class CsvExportService(AppDbContext db) : IExportService
         if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
             return Fail(rangeError);
 
-        var invoices = await QueryInvoices(from, to, status)
+        var invoices = await (await QueryInvoicesAsync(from, to, status, ct))
             .Include(i => i.Items)
             .OrderBy(i => i.IssueDate)
             .ThenBy(i => i.Number)
@@ -83,7 +83,7 @@ public class CsvExportService(AppDbContext db) : IExportService
         if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
             return Fail(rangeError);
 
-        var invoices = await QueryPosted(from, to)
+        var invoices = await (await QueryPostedAsync(from, to, ct))
             .Include(i => i.Items)
             .OrderBy(i => i.IssueDate)
             .ThenBy(i => i.Number)
@@ -133,8 +133,9 @@ public class CsvExportService(AppDbContext db) : IExportService
         if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
             return Fail(rangeError);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
-        var invoices = await QueryPosted(from, to)
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId, ct);
+        var invoices = await (await QueryPostedAsync(from, to, ct))
             .Include(i => i.Items)
             .OrderBy(i => i.IssueDate)
             .ThenBy(i => i.Number)
@@ -198,9 +199,10 @@ public class CsvExportService(AppDbContext db) : IExportService
             "application/zip"));
     }
 
-    private IQueryable<Invoice> QueryInvoices(DateOnly? from, DateOnly? to, InvoiceStatus? status)
+    private async Task<IQueryable<Invoice>> QueryInvoicesAsync(DateOnly? from, DateOnly? to, InvoiceStatus? status, CancellationToken ct)
     {
-        var query = db.Invoices.AsNoTracking().AsQueryable();
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var query = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId);
         if (from.HasValue)
             query = query.Where(i => i.IssueDate >= from.Value);
         if (to.HasValue)
@@ -210,12 +212,14 @@ public class CsvExportService(AppDbContext db) : IExportService
         return query;
     }
 
-    private IQueryable<Invoice> QueryPosted(DateOnly? from, DateOnly? to) =>
-        QueryInvoices(from, to, null)
-            .Where(i => i.Status == InvoiceStatus.Issued
-                || i.Status == InvoiceStatus.Paid
-                || i.Status == InvoiceStatus.Overdue
-                || i.Status == InvoiceStatus.Cancelled);
+    private async Task<IQueryable<Invoice>> QueryPostedAsync(DateOnly? from, DateOnly? to, CancellationToken ct)
+    {
+        var query = await QueryInvoicesAsync(from, to, null, ct);
+        return query.Where(i => i.Status == InvoiceStatus.Issued
+            || i.Status == InvoiceStatus.Paid
+            || i.Status == InvoiceStatus.Overdue
+            || i.Status == InvoiceStatus.Cancelled);
+    }
 
     private static void WriteEntry(ZipArchive zip, string name, byte[] content)
     {

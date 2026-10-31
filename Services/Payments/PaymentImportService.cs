@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Fakturio.Api.Services.Payments;
 
 public sealed class PaymentImportService(
-    AppDbContext db,
+    AppDbContext db, ITenantContext tenant,
     IInvoiceService invoices) : IPaymentImportService
 {
     private static readonly string[] VsHeaders =
@@ -69,7 +69,8 @@ public sealed class PaymentImportService(
         if (noteIndex == vsIndex)
             noteIndex = -1;
 
-        var openInvoices = await db.Invoices.AsNoTracking()
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var openInvoices = await db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
             .Where(i =>
                 i.Status == InvoiceStatus.Issued ||
                 i.Status == InvoiceStatus.Overdue ||

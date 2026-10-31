@@ -15,7 +15,8 @@ namespace Fakturio.Api.Services.Reports;
 public sealed class CachingReportService(
     ReportService inner,
     HybridCache cache,
-    IOptions<CacheOptions> options) : IReportService
+    IOptions<CacheOptions> options,
+    ITenantContext tenant) : IReportService
 {
     public async Task<ServiceResult<ReportOverviewResponse>> GetOverviewAsync(
         DateOnly? from,
@@ -30,7 +31,7 @@ public sealed class CachingReportService(
 
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportOverview(from, to, asOf),
+            CacheKeys.ReportOverview(await tenant.GetCompanyIdAsync(ct), from, to, asOf),
             async cancel =>
             {
                 var result = await inner.GetOverviewAsync(from, to, cancel);
@@ -55,7 +56,7 @@ public sealed class CachingReportService(
             return Fail<MonthlyRevenueResponse>(yearError);
 
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportMonthly(selectedYear),
+            CacheKeys.ReportMonthly(await tenant.GetCompanyIdAsync(ct), selectedYear),
             async cancel =>
             {
                 var result = await inner.GetMonthlyRevenueAsync(selectedYear, cancel);
@@ -81,7 +82,7 @@ public sealed class CachingReportService(
 
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportAging(asOf, largestLimit),
+            CacheKeys.ReportAging(await tenant.GetCompanyIdAsync(ct), asOf, largestLimit),
             async cancel =>
             {
                 var innerResult = await inner.GetAgingAsync(largestLimit, cancel);
@@ -107,7 +108,7 @@ public sealed class CachingReportService(
             return Fail<TopCustomersReportResponse>(rangeError);
 
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportTopCustomers(from, to, limit),
+            CacheKeys.ReportTopCustomers(await tenant.GetCompanyIdAsync(ct), from, to, limit),
             async cancel =>
             {
                 var result = await inner.GetTopCustomersAsync(from, to, limit, cancel);
@@ -132,7 +133,7 @@ public sealed class CachingReportService(
             return Fail<VatReportResponse>(rangeError);
 
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportVat(from, to),
+            CacheKeys.ReportVat(await tenant.GetCompanyIdAsync(ct), from, to),
             async cancel =>
             {
                 var result = await inner.GetVatSummaryAsync(from, to, cancel);

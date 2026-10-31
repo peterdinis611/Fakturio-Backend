@@ -11,7 +11,7 @@ using QuestPDF.Infrastructure;
 
 namespace Fakturio.Api.Services.Invoices;
 
-public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
+public class InvoicePdfService(AppDbContext db, ITenantContext tenant) : IInvoicePdfService
 {
     private static readonly string Accent = "#5B8DEF";
     private static readonly string AccentSoft = "#E8F0FE";
@@ -23,15 +23,16 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         Guid invoiceId,
         CancellationToken ct = default)
     {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var invoice = await db.Invoices
             .AsNoTracking()
             .Include(i => i.Items)
-            .FirstOrDefaultAsync(i => i.Id == invoiceId, ct);
+            .FirstOrDefaultAsync(i => i.Id == invoiceId && i.CompanyId == companyId, ct);
 
         if (invoice is null)
             return ServiceResult<InvoicePdfFile>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(c => c.Id == companyId, ct);
         var bankName = company?.BankName;
         var footerNote = company?.InvoiceFooter;
         var commercialRegister = company?.CommercialRegister;

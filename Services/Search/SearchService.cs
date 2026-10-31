@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Search;
 
-public class SearchService(AppDbContext db) : ISearchService
+public class SearchService(AppDbContext db, ITenantContext tenant) : ISearchService
 {
     public async Task<ServiceResult<GlobalSearchResponse>> SearchAsync(
         SearchRequest request,
@@ -35,7 +35,8 @@ public class SearchService(AppDbContext db) : ISearchService
 
         if (types.HasFlag(SearchEntityType.Customers))
         {
-            var customers = await db.Customers
+            var companyId = await tenant.GetCompanyIdAsync(ct);
+            var customers = await db.Customers.Where(c => c.CompanyId == companyId)
                 .AsNoTracking()
                 .Where(c =>
                     c.Name.Contains(term) ||
@@ -64,7 +65,8 @@ public class SearchService(AppDbContext db) : ISearchService
 
         if (types.HasFlag(SearchEntityType.Invoices))
         {
-            var invoices = db.Invoices.AsNoTracking().AsQueryable();
+            var companyId = await tenant.GetCompanyIdAsync(ct);
+            var invoices = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId);
 
             if (request.InvoiceStatus.HasValue)
                 invoices = invoices.Where(i => i.Status == request.InvoiceStatus.Value);
@@ -123,7 +125,8 @@ public class SearchService(AppDbContext db) : ISearchService
         (page, pageSize) = ServiceGuards.NormalizePaging(page, pageSize);
         var term = query.Trim();
 
-        var q = db.Customers.AsNoTracking().Where(c =>
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var q = db.Customers.AsNoTracking().Where(c => c.CompanyId == companyId &&
             c.Name.Contains(term) ||
             (c.Ico != null && c.Ico.Contains(term)) ||
             (c.Email != null && c.Email.Contains(term)) ||
@@ -164,7 +167,8 @@ public class SearchService(AppDbContext db) : ISearchService
         var term = query.Trim();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
-        var q = db.Invoices.AsNoTracking().Where(i =>
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var q = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId &&
             i.Number.Contains(term) ||
             i.CustomerName.Contains(term) ||
             (i.VariableSymbol != null && i.VariableSymbol.Contains(term)) ||
