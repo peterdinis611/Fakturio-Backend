@@ -15,6 +15,17 @@ public interface IExportService
         DateOnly? from,
         DateOnly? to,
         CancellationToken ct = default);
+
+    Task<ServiceResult<ExportFile>> ExportMoneyS3XmlAsync(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct = default);
+
+    /// <summary>ZIP: faktury.csv + dph.csv + money-s3.xml for accountants.</summary>
+    Task<ServiceResult<ExportFile>> ExportAccountantPackAsync(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct = default);
 }
 
 public record ExportFile(

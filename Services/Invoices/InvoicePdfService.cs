@@ -34,6 +34,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
         var bankName = company?.BankName;
         var footerNote = company?.InvoiceFooter;
+        var commercialRegister = company?.CommercialRegister;
+        var legalClauses = InvoiceLegalTexts.BuildClauses(invoice, commercialRegister);
 
         PaymentQrResult? qr = null;
         if (invoice.Status is not (InvoiceStatus.Cancelled or InvoiceStatus.Draft))
@@ -60,7 +62,8 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                 page.MarginVertical(32);
                 page.DefaultTextStyle(x => x.FontSize(9.5f).FontColor(Ink).FontFamily("Arial"));
 
-                page.Content().Element(c => ComposePage(c, invoice, bankName, footerNote, qr));
+                page.Content().Element(c =>
+                    ComposePage(c, invoice, bankName, footerNote, legalClauses, qr));
             });
         }).GeneratePdf();
 
@@ -73,6 +76,7 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         Invoice invoice,
         string? bankName,
         string? footerNote,
+        IReadOnlyList<string> legalClauses,
         PaymentQrResult? qr)
     {
         container.Column(col =>
@@ -202,11 +206,10 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
             {
                 row.RelativeItem().Column(left =>
                 {
-                    var note = BuildNote(invoice);
-                    if (!string.IsNullOrWhiteSpace(note))
+                    if (!string.IsNullOrWhiteSpace(invoice.Notes))
                     {
                         left.Item().Text("Poznámka").FontSize(8).FontColor(Muted);
-                        left.Item().PaddingTop(2).Text(note).FontSize(9);
+                        left.Item().PaddingTop(2).Text(invoice.Notes.Trim()).FontSize(9);
                     }
 
                     if (qr is not null)
@@ -230,10 +233,15 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
 
                 row.ConstantItem(200).Column(right =>
                 {
-                    if (showVat)
+                    if (showVat && !InvoiceLegalTexts.IsReverseCharge(invoice))
                     {
                         TotalsRow(right, "Základ", Money(invoice.Subtotal, invoice.Currency));
                         TotalsRow(right, "DPH", Money(invoice.VatTotal, invoice.Currency));
+                    }
+                    else if (InvoiceLegalTexts.IsReverseCharge(invoice))
+                    {
+                        TotalsRow(right, "Základ", Money(invoice.Subtotal, invoice.Currency));
+                        TotalsRow(right, "DPH (prenesená)", Money(0m, invoice.Currency));
                     }
 
                     right.Item().PaddingTop(4).AlignRight().Text("Celková suma")
@@ -252,9 +260,14 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
                 });
             });
 
+            if (legalClauses.Count > 0)
+            {
+                col.Item().PaddingTop(12).Element(c => LegalBlock(c, legalClauses));
+            }
+
             if (!string.IsNullOrWhiteSpace(footerNote))
             {
-                col.Item().PaddingTop(10).Text(footerNote).FontSize(8).FontColor(Muted);
+                col.Item().PaddingTop(8).Text(footerNote).FontSize(8).FontColor(Muted);
             }
 
             if (invoice.Status == InvoiceStatus.Cancelled && !string.IsNullOrWhiteSpace(invoice.CancelReason))
@@ -337,14 +350,22 @@ public class InvoicePdfService(AppDbContext db) : IInvoicePdfService
         });
     }
 
-    private static string BuildNote(Invoice invoice)
+    private static void LegalBlock(IContainer container, IReadOnlyList<string> clauses)
     {
-        var parts = new List<string>();
-        if (!invoice.SellerIsVatPayer)
-            parts.Add("Nie sme platiteľmi DPH.");
-        if (!string.IsNullOrWhiteSpace(invoice.Notes))
-            parts.Add(invoice.Notes.Trim());
-        return string.Join(" ", parts);
+        container
+            .Border(0.75f)
+            .BorderColor(Colors.Grey.Lighten2)
+            .Background(Colors.Grey.Lighten4)
+            .Padding(8)
+            .Column(col =>
+            {
+                col.Item().Text("PRÁVNE ÚDAJE")
+                    .FontSize(7.5f).SemiBold().FontColor(Muted).LetterSpacing(0.04f);
+                foreach (var clause in clauses)
+                {
+                    col.Item().PaddingTop(3).Text(clause).FontSize(8).FontColor(Ink);
+                }
+            });
     }
 
     private static IContainer TableHeader(IContainer container) =>
