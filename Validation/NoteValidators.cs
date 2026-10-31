@@ -10,7 +10,7 @@ public sealed class CreateNoteRequestValidator : AbstractValidator<CreateNoteReq
         RuleFor(x => x.Title)
             .NotEmpty().WithMessage("Názov je povinný.")
             .MaximumLength(200);
-        RuleFor(x => x.Body).MaximumLength(8000);
+        RuleFor(x => x.Body).MaximumLength(16000);
     }
 }
 
@@ -22,7 +22,7 @@ public sealed class UpdateNoteRequestValidator : AbstractValidator<UpdateNoteReq
             .MaximumLength(200)
             .When(x => x.Title is not null);
         RuleFor(x => x.Body)
-            .MaximumLength(8000)
+            .MaximumLength(16000)
             .When(x => x.Body is not null);
     }
 }

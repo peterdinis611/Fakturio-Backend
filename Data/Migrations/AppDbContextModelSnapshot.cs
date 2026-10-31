@@ -693,15 +693,15 @@ namespace Fakturio.Api.Data.Migrations
                 });
 
             modelBuilder.Entity("Fakturio.Api.Models.Note", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
+            {
+                b.Property<Guid>("Id")
+                    .ValueGeneratedOnAdd()
+                    .HasColumnType("TEXT");
 
-                    b.Property<string>("Body")
-                        .IsRequired()
-                        .HasMaxLength(8000)
-                        .HasColumnType("TEXT");
+                b.Property<string>("Body")
+                    .IsRequired()
+                    .HasMaxLength(16000)
+                    .HasColumnType("TEXT");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");

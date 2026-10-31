@@ -204,7 +204,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasKey(n => n.Id);
             entity.Property(n => n.Title).HasMaxLength(200).IsRequired();
-            entity.Property(n => n.Body).HasMaxLength(8000);
+            entity.Property(n => n.Body).HasMaxLength(16000);
             entity.HasIndex(n => n.IsPinned);
             entity.HasIndex(n => n.UpdatedAt);
         });

@@ -21,7 +21,24 @@ public static class DatabaseInitializer
             return;
         }
 
-        await db.Database.MigrateAsync(ct);
+        // Nothing to apply — skip MigrateAsync. On SQLite it can still block for a long
+        // time when another process (watch/ef/duplicate API) holds the write lock.
+        if (pending.Count == 0)
+            return;
+
+        // SQLite can block forever if another process holds the DB lock.
+        // Fail fast so the host does not hang silently during startup.
+        using var migrateCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        migrateCts.CancelAfter(TimeSpan.FromSeconds(30));
+        try
+        {
+            await db.Database.MigrateAsync(migrateCts.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                "Database migration timed out after 30s. Another process may be locking fakturio.db.");
+        }
     }
 
     private static async Task<bool> HasLegacySchemaAsync(AppDbContext db, CancellationToken ct)
