@@ -1,8 +1,9 @@
 namespace Fakturio.Api.Models;
 
-public class Customer
+public class Customer : ICompanyOwned
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CompanyId { get; set; }
     public string Name { get; set; } = string.Empty;
     public string? Ico { get; set; }
     public string? Dic { get; set; }

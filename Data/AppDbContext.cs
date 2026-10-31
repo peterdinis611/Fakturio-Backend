@@ -15,12 +15,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<AuditLogEntry> AuditLogs => Set<AuditLogEntry>();
     public DbSet<Note> Notes => Set<Note>();
+    public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
+    public DbSet<RecurringInvoiceItem> RecurringInvoiceItems => Set<RecurringInvoiceItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Customer>(entity =>
         {
             entity.HasKey(c => c.Id);
+            entity.Property(c => c.CompanyId).IsRequired();
+            entity.HasIndex(c => c.CompanyId);
+            entity.HasIndex(c => new { c.CompanyId, c.Ico });
             entity.Property(c => c.Name).HasMaxLength(200).IsRequired();
             entity.Property(c => c.Ico).HasMaxLength(20);
             entity.Property(c => c.Dic).HasMaxLength(20);
@@ -37,6 +42,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<CompanySettings>(entity =>
         {
             entity.HasKey(c => c.Id);
+            entity.Property(c => c.UserId).IsRequired();
+            entity.HasIndex(c => c.UserId).IsUnique();
+            entity.HasOne(c => c.User)
+                .WithMany()
+                .HasForeignKey(c => c.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
             entity.Property(c => c.Name).HasMaxLength(200).IsRequired();
             entity.Property(c => c.LegalForm).HasMaxLength(50);
             entity.Property(c => c.Ico).HasMaxLength(20);
@@ -71,8 +82,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Invoice>(entity =>
         {
             entity.HasKey(i => i.Id);
+            entity.Property(i => i.CompanyId).IsRequired();
+            entity.HasIndex(i => i.CompanyId);
             entity.Property(i => i.Number).HasMaxLength(50).IsRequired();
-            entity.HasIndex(i => i.Number).IsUnique();
+            entity.HasIndex(i => new { i.CompanyId, i.Number }).IsUnique();
             entity.Property(i => i.DocumentType).HasDefaultValue(InvoiceDocumentType.Invoice);
             entity.HasIndex(i => i.DocumentType);
             entity.Property(i => i.RelatedInvoiceNumber).HasMaxLength(50);
@@ -141,6 +154,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<ServiceCatalogItem>(entity =>
         {
             entity.HasKey(s => s.Id);
+            entity.Property(s => s.CompanyId).IsRequired();
+            entity.HasIndex(s => s.CompanyId);
             entity.Property(s => s.Description).HasMaxLength(500).IsRequired();
             entity.Property(s => s.Unit).HasMaxLength(20).HasDefaultValue("ks");
             entity.Property(s => s.UnitPrice).HasPrecision(18, 4);
@@ -203,10 +218,40 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<Note>(entity =>
         {
             entity.HasKey(n => n.Id);
+            entity.Property(n => n.CompanyId).IsRequired();
+            entity.HasIndex(n => n.CompanyId);
             entity.Property(n => n.Title).HasMaxLength(200).IsRequired();
             entity.Property(n => n.Body).HasMaxLength(16000);
             entity.HasIndex(n => n.IsPinned);
             entity.HasIndex(n => n.UpdatedAt);
+        });
+
+        modelBuilder.Entity<RecurringInvoice>(entity =>
+        {
+            entity.HasKey(r => r.Id);
+            entity.Property(r => r.CompanyId).IsRequired();
+            entity.HasIndex(r => r.CompanyId);
+            entity.HasIndex(r => new { r.CompanyId, r.IsActive, r.NextRunOn });
+            entity.Property(r => r.Name).HasMaxLength(200).IsRequired();
+            entity.Property(r => r.Notes).HasMaxLength(2000);
+            entity.HasOne(r => r.Customer)
+                .WithMany()
+                .HasForeignKey(r => r.CustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<RecurringInvoiceItem>(entity =>
+        {
+            entity.HasKey(i => i.Id);
+            entity.Property(i => i.Description).HasMaxLength(500).IsRequired();
+            entity.Property(i => i.Unit).HasMaxLength(20).HasDefaultValue("ks");
+            entity.Property(i => i.Quantity).HasPrecision(18, 4);
+            entity.Property(i => i.UnitPrice).HasPrecision(18, 4);
+            entity.Property(i => i.VatRate).HasPrecision(5, 2);
+            entity.HasOne(i => i.RecurringInvoice)
+                .WithMany(r => r.Items)
+                .HasForeignKey(i => i.RecurringInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

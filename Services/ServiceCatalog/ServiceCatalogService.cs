@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.ServiceCatalog;
 
-public sealed class ServiceCatalogService(AppDbContext db, ICompanyService company) : IServiceCatalogService
+public sealed class ServiceCatalogService(AppDbContext db, ICompanyService company, ITenantContext tenant) : IServiceCatalogService
 {
     public async Task<PagedResponse<ServiceCatalogItemResponse>> ListAsync(
         int page,
@@ -20,7 +20,8 @@ public sealed class ServiceCatalogService(AppDbContext db, ICompanyService compa
         (page, pageSize) = ServiceGuards.NormalizePaging(page, pageSize);
         var term = ServiceGuards.NormalizeOptionalSearch(search);
 
-        var query = db.ServiceCatalogItems.AsNoTracking().AsQueryable();
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var query = db.ServiceCatalogItems.AsNoTracking().Where(s => s.CompanyId == companyId);
         if (activeOnly == true)
             query = query.Where(s => s.IsActive);
         if (term is not null)
@@ -47,8 +48,9 @@ public sealed class ServiceCatalogService(AppDbContext db, ICompanyService compa
         if (id == Guid.Empty)
             return null;
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var item = await db.ServiceCatalogItems.AsNoTracking()
-            .FirstOrDefaultAsync(s => s.Id == id, ct);
+            .FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId, ct);
         return item is null ? null : ServiceCatalogMapper.ToResponse(item);
     }
 
@@ -60,7 +62,9 @@ public sealed class ServiceCatalogService(AppDbContext db, ICompanyService compa
         var isVatPayer = settings.IsVatPayer;
         var defaultVat = isVatPayer ? settings.DefaultVatRate : 0m;
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var entity = ServiceCatalogMapper.FromCreate(request, defaultVat);
+        entity.CompanyId = companyId;
         if (!isVatPayer)
             entity.VatRate = 0m;
 
@@ -75,7 +79,8 @@ public sealed class ServiceCatalogService(AppDbContext db, ICompanyService compa
         UpdateServiceCatalogItemRequest request,
         CancellationToken ct = default)
     {
-        var entity = await db.ServiceCatalogItems.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var entity = await db.ServiceCatalogItems.FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId, ct);
         if (entity is null)
             return ServiceResult<ServiceCatalogItemResponse>.NotFound(
                 "Service not found.",
@@ -94,7 +99,8 @@ public sealed class ServiceCatalogService(AppDbContext db, ICompanyService compa
 
     public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await db.ServiceCatalogItems.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var entity = await db.ServiceCatalogItems.FirstOrDefaultAsync(s => s.Id == id && s.CompanyId == companyId, ct);
         if (entity is null)
             return ServiceResult.NotFound("Service not found.", ErrorCodes.NotFound);
 

@@ -1,8 +1,9 @@
 namespace Fakturio.Api.Models;
 
-public class Note
+public class Note : ICompanyOwned
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CompanyId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string Body { get; set; } = string.Empty;
     public bool IsPinned { get; set; }

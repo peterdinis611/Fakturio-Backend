@@ -1,8 +1,9 @@
 namespace Fakturio.Api.Models;
 
-public class Invoice
+public class Invoice : ICompanyOwned
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CompanyId { get; set; }
     public string Number { get; set; } = string.Empty;
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public InvoiceDocumentType DocumentType { get; set; } = InvoiceDocumentType.Invoice;

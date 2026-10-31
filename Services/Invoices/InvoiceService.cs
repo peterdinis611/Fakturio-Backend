@@ -14,17 +14,19 @@ public class InvoiceService(
     AppDbContext db,
     IInvoiceNumberService numbers,
     ICacheInvalidator cache,
-    IAuditLogService audit) : IInvoiceService
+    IAuditLogService audit,
+    ITenantContext tenant) : IInvoiceService
 {
     public async Task<PagedResponse<InvoiceListItemResponse>> ListAsync(
         InvoiceListQuery query,
         CancellationToken ct = default)
     {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var (page, pageSize) = ServiceGuards.NormalizePaging(query.Page, query.PageSize);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var search = ServiceGuards.NormalizeOptionalSearch(query.Search);
 
-        var invoices = db.Invoices.AsNoTracking().AsQueryable();
+        var invoices = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId);
 
         if (query.Status.HasValue)
             invoices = invoices.Where(i => i.Status == query.Status.Value);
@@ -83,10 +85,11 @@ public class InvoiceService(
 
     public async Task<InvoiceResponse?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var invoice = await db.Invoices
             .AsNoTracking()
             .Include(i => i.Items)
-            .FirstOrDefaultAsync(i => i.Id == id, ct);
+            .FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, ct);
 
         return invoice is null ? null : InvoiceMapper.ToResponse(invoice);
     }
@@ -96,10 +99,11 @@ public class InvoiceService(
         if (string.IsNullOrWhiteSpace(number))
             return null;
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var invoice = await db.Invoices
             .AsNoTracking()
             .Include(i => i.Items)
-            .FirstOrDefaultAsync(i => i.Number == number.Trim(), ct);
+            .FirstOrDefaultAsync(i => i.CompanyId == companyId && i.Number == number.Trim(), ct);
 
         return invoice is null ? null : InvoiceMapper.ToResponse(invoice);
     }
@@ -120,11 +124,15 @@ public class InvoiceService(
                 "Credit notes must be created from an existing invoice via POST /api/invoices/{id}/credit-note.",
                 ErrorCodes.InvalidDocumentType);
 
-        var customer = await db.Customers.FindAsync([request.CustomerId], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
+        var customer = await db.Customers.FirstOrDefaultAsync(
+            c => c.Id == request.CustomerId && c.CompanyId == companyId, ct);
         if (customer is null)
             return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.UserId == userId, ct);
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDays = company?.DefaultDueDays ?? 14;
         var dueDate = request.DueDate ?? issueDate.AddDays(dueDays);
@@ -145,6 +153,7 @@ public class InvoiceService(
                 ErrorCodes.InvalidStatus);
 
         var number = await numbers.NextAsync(
+            companyId,
             documentType,
             company?.InvoicePrefix,
             company?.ProformaPrefix,
@@ -153,6 +162,7 @@ public class InvoiceService(
 
         var invoice = new Invoice
         {
+            CompanyId = companyId,
             Number = number,
             DocumentType = documentType,
             Status = status,
@@ -239,7 +249,9 @@ public class InvoiceService(
         if (customer is null)
             return ServiceResult<InvoiceResponse>.BadRequest("Customer not found.", ErrorCodes.CustomerNotFound);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId, ct);
 
         invoice.IssueDate = request.IssueDate;
         invoice.DueDate = request.DueDate;
@@ -284,7 +296,8 @@ public class InvoiceService(
         UpdateInvoiceStatusRequest request,
         CancellationToken ct = default)
     {
-        var invoice = await db.Invoices.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoice = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, ct);
         if (invoice is null)
             return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
@@ -335,7 +348,8 @@ public class InvoiceService(
         MarkInvoicePaidRequest request,
         CancellationToken ct = default)
     {
-        var invoice = await db.Invoices.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoice = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, ct);
         if (invoice is null)
             return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
@@ -380,7 +394,8 @@ public class InvoiceService(
         CancelInvoiceRequest request,
         CancellationToken ct = default)
     {
-        var invoice = await db.Invoices.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoice = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, ct);
         if (invoice is null)
             return ServiceResult<InvoiceStatusResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
@@ -431,7 +446,9 @@ public class InvoiceService(
                 "Credit notes cannot be duplicated. Create a new credit note from the original invoice.",
                 ErrorCodes.InvalidDocumentType);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId, ct);
         var issueDate = DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDays = company?.DefaultDueDays ?? 14;
         var number = await numbers.NextAsync(
@@ -487,7 +504,9 @@ public class InvoiceService(
                 "Credit notes require an issued, paid, or overdue invoice.",
                 ErrorCodes.InvalidStatus);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId, ct);
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDate = request.DueDate ?? issueDate;
         if (dueDate < issueDate)
@@ -496,6 +515,7 @@ public class InvoiceService(
                 ErrorCodes.InvalidDateRange);
 
         var number = await numbers.NextAsync(
+            companyId,
             InvoiceDocumentType.CreditNote,
             company?.InvoicePrefix,
             company?.ProformaPrefix,
@@ -574,12 +594,15 @@ public class InvoiceService(
                 "Proforma must be issued (or paid) before creating a tax invoice.",
                 ErrorCodes.InvalidStatus);
 
-        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking().FirstOrDefaultAsync(c => c.UserId == userId, ct);
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDays = company?.DefaultDueDays ?? 14;
         var dueDate = request.DueDate ?? issueDate.AddDays(dueDays);
 
         var number = await numbers.NextAsync(
+            companyId,
             InvoiceDocumentType.Invoice,
             company?.InvoicePrefix,
             company?.ProformaPrefix,
@@ -635,7 +658,8 @@ public class InvoiceService(
 
     public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var invoice = await db.Invoices.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoice = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, ct);
         if (invoice is null)
             return ServiceResult.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 
@@ -667,7 +691,8 @@ public class InvoiceService(
         CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var query = db.Invoices.AsNoTracking()
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var query = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
             .Where(i => i.DocumentType != InvoiceDocumentType.Proforma)
             .AsQueryable();
 
@@ -742,7 +767,8 @@ public class InvoiceService(
         Guid id,
         CancellationToken ct = default)
     {
-        var invoice = await db.Invoices.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoice = await db.Invoices.FirstOrDefaultAsync(i => i.Id == id && i.CompanyId == companyId, ct);
         if (invoice is null)
             return ServiceResult<InvoiceReminderItemResponse>.NotFound("Invoice not found.", ErrorCodes.InvoiceNotFound);
 

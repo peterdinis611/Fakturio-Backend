@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Notes;
 
-public sealed class NoteService(AppDbContext db) : INoteService
+public sealed class NoteService(AppDbContext db, ITenantContext tenant) : INoteService
 {
     public async Task<PagedResponse<NoteResponse>> ListAsync(
         int page,
@@ -20,7 +20,8 @@ public sealed class NoteService(AppDbContext db) : INoteService
         (page, pageSize) = ServiceGuards.NormalizePaging(page, pageSize);
         var term = ServiceGuards.NormalizeOptionalSearch(search);
 
-        var query = db.Notes.AsNoTracking().AsQueryable();
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var query = db.Notes.AsNoTracking().Where(n => n.CompanyId == companyId);
         if (pinnedOnly == true)
             query = query.Where(n => n.IsPinned);
         if (term is not null)
@@ -47,8 +48,9 @@ public sealed class NoteService(AppDbContext db) : INoteService
         if (id == Guid.Empty)
             return null;
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var note = await db.Notes.AsNoTracking()
-            .FirstOrDefaultAsync(n => n.Id == id, ct);
+            .FirstOrDefaultAsync(n => n.Id == id && n.CompanyId == companyId, ct);
         return note is null ? null : NoteMapper.ToResponse(note);
     }
 
@@ -56,7 +58,9 @@ public sealed class NoteService(AppDbContext db) : INoteService
         CreateNoteRequest request,
         CancellationToken ct = default)
     {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var entity = NoteMapper.FromCreate(request);
+        entity.CompanyId = companyId;
         db.Notes.Add(entity);
         await db.SaveChangesAsync(ct);
         return ServiceResult<NoteResponse>.Created(NoteMapper.ToResponse(entity));
@@ -67,7 +71,8 @@ public sealed class NoteService(AppDbContext db) : INoteService
         UpdateNoteRequest request,
         CancellationToken ct = default)
     {
-        var entity = await db.Notes.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var entity = await db.Notes.FirstOrDefaultAsync(n => n.Id == id && n.CompanyId == companyId, ct);
         if (entity is null)
             return ServiceResult<NoteResponse>.NotFound("Poznámka nebola nájdená.", ErrorCodes.NotFound);
 
@@ -78,7 +83,8 @@ public sealed class NoteService(AppDbContext db) : INoteService
 
     public async Task<ServiceResult> DeleteAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await db.Notes.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var entity = await db.Notes.FirstOrDefaultAsync(n => n.Id == id && n.CompanyId == companyId, ct);
         if (entity is null)
             return ServiceResult.NotFound("Poznámka nebola nájdená.", ErrorCodes.NotFound);
 

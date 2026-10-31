@@ -4,6 +4,10 @@ public class CompanySettings
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
+    /// <summary>Owning user — 1:1 for solo SaaS tenancy.</summary>
+    public Guid UserId { get; set; }
+    public AppUser? User { get; set; }
+
     // Identity
     public string Name { get; set; } = string.Empty;
     public string? LegalForm { get; set; }

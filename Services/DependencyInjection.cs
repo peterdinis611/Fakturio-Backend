@@ -19,7 +19,10 @@ using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Resume;
 using Fakturio.Api.Services.Search;
 using Fakturio.Api.Services.ServiceCatalog;
+using Fakturio.Api.Services.Tenancy;
 using Fakturio.Api.Services.Users;
+using Fakturio.Api.Services.Gdpr;
+using Fakturio.Api.Services.Recurring;
 
 namespace Fakturio.Api.Services;
 
@@ -66,6 +69,7 @@ public static class DependencyInjection
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentActorAccessor, CurrentActorAccessor>();
+        services.AddScoped<ITenantContext, TenantContext>();
         services.AddScoped<IAuditLogService, AuditLogService>();
 
         services.AddScoped<IInvoiceNumberService, InvoiceNumberService>();
@@ -87,6 +91,9 @@ public static class DependencyInjection
         services.AddScoped<IResumeService, ResumeService>();
         services.AddScoped<INoteService, NoteService>();
         services.AddScoped<IUserService, UserService>();
+        services.AddScoped<IGdprService, GdprService>();
+        services.AddScoped<IRecurringInvoiceService, RecurringInvoiceService>();
+        services.AddHostedService<RecurringInvoiceBackgroundService>();
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddSingleton<JwtTokenService>();
         services.AddScoped<IAuthService, AuthService>();

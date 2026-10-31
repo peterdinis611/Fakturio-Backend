@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Customers;
 
-public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustomerService
+public class CustomerService(AppDbContext db, ICacheInvalidator cache, ITenantContext tenant) : ICustomerService
 {
     public async Task<PagedResponse<CustomerResponse>> ListAsync(
         int page,
@@ -22,7 +22,8 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         (page, pageSize) = ServiceGuards.NormalizePaging(page, pageSize);
         var term = ServiceGuards.NormalizeOptionalSearch(search);
 
-        var query = db.Customers.AsNoTracking().AsQueryable();
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var query = db.Customers.AsNoTracking().Where(c => c.CompanyId == companyId);
 
         if (term is not null)
         {
@@ -61,7 +62,8 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         limit = Math.Clamp(limit, 1, 100);
         var term = ServiceGuards.NormalizeOptionalSearch(search);
 
-        var query = db.Customers.AsNoTracking().AsQueryable();
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var query = db.Customers.AsNoTracking().Where(c => c.CompanyId == companyId);
         if (term is not null)
         {
             query = query.Where(c =>
@@ -116,7 +118,8 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         if (id == Guid.Empty)
             return null;
 
-        var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id && c.CompanyId == companyId, ct);
         if (customer is null)
             return null;
 
@@ -160,10 +163,11 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         if (string.IsNullOrWhiteSpace(request.Name))
             return ServiceResult<CustomerResponse>.BadRequest("Name is required.", ErrorCodes.BadRequest);
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var createIco = SlovakValidators.NormalizeIco(request.Ico);
         if (createIco is not null)
         {
-            var exists = await db.Customers.AnyAsync(c => c.Ico == createIco, ct);
+            var exists = await db.Customers.AnyAsync(c => c.CompanyId == companyId && c.Ico == createIco, ct);
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",
@@ -174,14 +178,14 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         {
             var email = request.Email.Trim().ToLowerInvariant();
             var emailExists = await db.Customers.AnyAsync(
-                c => c.Email != null && c.Email.ToLower() == email, ct);
+                c => c.CompanyId == companyId && c.Email != null && c.Email.ToLower() == email, ct);
             if (emailExists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this email already exists.",
                     ErrorCodes.DuplicateEmail);
         }
 
-        var customer = new Customer();
+        var customer = new Customer { CompanyId = companyId };
         CustomerMapper.Apply(customer, request);
         db.Customers.Add(customer);
         await SaveAndInvalidateAsync(ct);
@@ -200,14 +204,15 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         if (string.IsNullOrWhiteSpace(request.Name))
             return ServiceResult<CustomerResponse>.BadRequest("Name is required.", ErrorCodes.BadRequest);
 
-        var customer = await db.Customers.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id && c.CompanyId == companyId, ct);
         if (customer is null)
             return ServiceResult<CustomerResponse>.NotFound("Customer not found.", ErrorCodes.NotFound);
 
         var updateIco = SlovakValidators.NormalizeIco(request.Ico);
         if (updateIco is not null)
         {
-            var exists = await db.Customers.AnyAsync(c => c.Id != id && c.Ico == updateIco, ct);
+            var exists = await db.Customers.AnyAsync(c => c.CompanyId == companyId && c.Id != id && c.Ico == updateIco, ct);
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",
@@ -218,7 +223,7 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         {
             var email = request.Email.Trim().ToLowerInvariant();
             var emailExists = await db.Customers.AnyAsync(
-                c => c.Id != id && c.Email != null && c.Email.ToLower() == email, ct);
+                c => c.CompanyId == companyId && c.Id != id && c.Email != null && c.Email.ToLower() == email, ct);
             if (emailExists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this email already exists.",
@@ -237,7 +242,8 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         if (ServiceGuards.ValidateGuid(id, "Customer", ErrorCodes.EmptyGuid) is { } guidError)
             return guidError;
 
-        var customer = await db.Customers.FindAsync([id], ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var customer = await db.Customers.FirstOrDefaultAsync(c => c.Id == id && c.CompanyId == companyId, ct);
         if (customer is null)
             return ServiceResult.NotFound("Customer not found.", ErrorCodes.NotFound);
 

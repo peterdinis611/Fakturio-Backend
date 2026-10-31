@@ -1,8 +1,9 @@
 namespace Fakturio.Api.Models;
 
-public class ServiceCatalogItem
+public class ServiceCatalogItem : ICompanyOwned
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CompanyId { get; set; }
     public string Description { get; set; } = string.Empty;
     public string Unit { get; set; } = "ks";
     public decimal UnitPrice { get; set; }

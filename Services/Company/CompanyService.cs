@@ -13,7 +13,8 @@ namespace Fakturio.Api.Services.Company;
 public class CompanyService(
     AppDbContext db,
     ICacheInvalidator cache,
-    ILogoStorageService logos) : ICompanyService
+    ILogoStorageService logos,
+    ITenantContext tenant) : ICompanyService
 {
     public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
@@ -136,12 +137,14 @@ public class CompanyService(
 
     private async Task<CompanySettings> GetOrCreateAsync(CancellationToken ct)
     {
-        var company = await db.CompanySettings.FirstOrDefaultAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
+        var company = await db.CompanySettings.FirstOrDefaultAsync(c => c.UserId == userId, ct);
         if (company is not null)
             return company;
 
         company = new CompanySettings
         {
+            UserId = userId,
             Name = string.Empty,
             DefaultDueDays = 14,
             DefaultVatRate = 23m,

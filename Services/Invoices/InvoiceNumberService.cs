@@ -8,6 +8,7 @@ namespace Fakturio.Api.Services.Invoices;
 public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
 {
     public async Task<string> NextAsync(
+        Guid companyId,
         InvoiceDocumentType documentType,
         string? invoicePrefix = null,
         string? proformaPrefix = null,
@@ -20,7 +21,9 @@ public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
         var startsWith = $"{cleanPrefix}{yearPart}";
 
         var lastNumber = await db.Invoices
-            .Where(i => i.DocumentType == documentType && i.Number.StartsWith(startsWith))
+            .Where(i => i.CompanyId == companyId
+                && i.DocumentType == documentType
+                && i.Number.StartsWith(startsWith))
             .OrderByDescending(i => i.Number)
             .Select(i => i.Number)
             .FirstOrDefaultAsync(ct);

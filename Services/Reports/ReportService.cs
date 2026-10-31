@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Reports;
 
-public class ReportService(AppDbContext db) : IReportService
+public class ReportService(AppDbContext db, ITenantContext tenant) : IReportService
 {
     private const string DefaultCurrency = "EUR";
 
@@ -88,7 +88,8 @@ public class ReportService(AppDbContext db) : IReportService
         var from = new DateOnly(selectedYear, 1, 1);
         var to = new DateOnly(selectedYear, 12, 31);
 
-        var invoices = await db.Invoices
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoices = await db.Invoices.Where(i => i.CompanyId == companyId)
             .AsNoTracking()
             .Where(i =>
                 i.DocumentType != InvoiceDocumentType.Proforma &&
@@ -148,7 +149,8 @@ public class ReportService(AppDbContext db) : IReportService
         largestLimit = Math.Clamp(largestLimit, 1, 50);
         var today = Today();
 
-        var open = await db.Invoices
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var open = await db.Invoices.Where(i => i.CompanyId == companyId)
             .AsNoTracking()
             .Where(i =>
                 (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
@@ -324,8 +326,9 @@ public class ReportService(AppDbContext db) : IReportService
         bool includeItems,
         CancellationToken ct)
     {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         IQueryable<Invoice> query = db.Invoices.AsNoTracking()
-            .Where(i => i.DocumentType != InvoiceDocumentType.Proforma);
+            .Where(i => i.CompanyId == companyId && i.DocumentType != InvoiceDocumentType.Proforma);
         if (includeItems)
             query = query.Include(i => i.Items);
 

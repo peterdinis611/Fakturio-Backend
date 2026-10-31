@@ -11,58 +11,63 @@ namespace Fakturio.Api.Services.Company;
 public sealed class CachingCompanyService(
     CompanyService inner,
     HybridCache cache,
-    IOptions<CacheOptions> options) : ICompanyService
+    IOptions<CacheOptions> options,
+    ITenantContext tenant) : ICompanyService
 {
-    public Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
+    public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetAsync(ct);
+            return await inner.GetAsync(ct);
 
-        return cache.GetOrCreateAsync(
-            CacheKeys.CompanySettings,
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        return await cache.GetOrCreateAsync(
+            CacheKeys.CompanySettings(companyId),
             async cancel => await inner.GetAsync(cancel),
             new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
             tags: [CacheTags.Company],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
     }
 
-    public Task<CompanySummaryResponse> GetSummaryAsync(CancellationToken ct = default)
+    public async Task<CompanySummaryResponse> GetSummaryAsync(CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetSummaryAsync(ct);
+            return await inner.GetSummaryAsync(ct);
 
-        return cache.GetOrCreateAsync(
-            CacheKeys.CompanySummary,
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        return await cache.GetOrCreateAsync(
+            CacheKeys.CompanySummary(companyId),
             async cancel => await inner.GetSummaryAsync(cancel),
             new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
             tags: [CacheTags.Company],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
     }
 
-    public Task<CompanyCompletenessResponse> GetStatusAsync(CancellationToken ct = default)
+    public async Task<CompanyCompletenessResponse> GetStatusAsync(CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetStatusAsync(ct);
+            return await inner.GetStatusAsync(ct);
 
-        return cache.GetOrCreateAsync(
-            CacheKeys.CompanyStatus,
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        return await cache.GetOrCreateAsync(
+            CacheKeys.CompanyStatus(companyId),
             async cancel => await inner.GetStatusAsync(cancel),
             new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
             tags: [CacheTags.Company],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
     }
 
-    public Task<CompanyBankResponse> GetBankAsync(CancellationToken ct = default)
+    public async Task<CompanyBankResponse> GetBankAsync(CancellationToken ct = default)
     {
         if (!options.Value.Enabled)
-            return inner.GetBankAsync(ct);
+            return await inner.GetBankAsync(ct);
 
-        return cache.GetOrCreateAsync(
-            CacheKeys.CompanyBank,
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        return await cache.GetOrCreateAsync(
+            CacheKeys.CompanyBank(companyId),
             async cancel => await inner.GetBankAsync(cancel),
             new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
             tags: [CacheTags.Company],
-            cancellationToken: ct).AsTask();
+            cancellationToken: ct);
     }
 
     public Task<ServiceResult<CompanySettingsResponse>> UpdateAsync(
