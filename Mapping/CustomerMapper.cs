@@ -30,7 +30,7 @@ public static class CustomerMapper
     public static void Apply(Customer customer, CreateCustomerRequest request)
     {
         customer.Name = request.Name.Trim();
-        customer.Ico = NormalizeOptional(request.Ico);
+        customer.Ico = Validation.SlovakValidators.NormalizeIco(request.Ico);
         customer.Dic = NormalizeOptional(request.Dic);
         customer.IcDph = NormalizeOptional(request.IcDph)?.ToUpperInvariant();
         customer.Email = NormalizeOptional(request.Email);
@@ -46,7 +46,7 @@ public static class CustomerMapper
     public static void Apply(Customer customer, UpdateCustomerRequest request)
     {
         customer.Name = request.Name.Trim();
-        customer.Ico = NormalizeOptional(request.Ico);
+        customer.Ico = Validation.SlovakValidators.NormalizeIco(request.Ico);
         customer.Dic = NormalizeOptional(request.Dic);
         customer.IcDph = NormalizeOptional(request.IcDph)?.ToUpperInvariant();
         customer.Email = NormalizeOptional(request.Email);

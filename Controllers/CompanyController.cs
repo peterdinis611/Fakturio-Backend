@@ -1,3 +1,4 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
@@ -62,4 +63,29 @@ public sealed class CompanyController(ICompanyService company) : ApiControllerBa
         [FromBody] UpdateCompanyContactRequest request,
         CancellationToken ct)
         => (await company.UpdateContactAsync(request, ct)).ToActionResult(this);
+
+    [HttpPost("logo")]
+    [RequestSizeLimit(2 * 1024 * 1024 + 64 * 1024)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 2 * 1024 * 1024 + 64 * 1024)]
+    [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanySettingsResponse>> UploadLogo(
+        IFormFile file,
+        CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return BadRequest(ApiProblemDetails.From(
+                StatusCodes.Status400BadRequest,
+                "Select a logo image.",
+                ErrorCodes.BadRequest,
+                HttpContext.Request.Path));
+        }
+
+        return (await company.UploadLogoAsync(file, ct)).ToActionResult(this);
+    }
+
+    [HttpDelete("logo")]
+    [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanySettingsResponse>> DeleteLogo(CancellationToken ct)
+        => (await company.DeleteLogoAsync(ct)).ToActionResult(this);
 }

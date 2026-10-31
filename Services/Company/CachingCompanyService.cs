@@ -89,4 +89,13 @@ public sealed class CachingCompanyService(
         UpdateCompanyContactRequest request,
         CancellationToken ct = default)
         => inner.UpdateContactAsync(request, ct);
+
+    public Task<ServiceResult<CompanySettingsResponse>> UploadLogoAsync(
+        IFormFile file,
+        CancellationToken ct = default)
+        => inner.UploadLogoAsync(file, ct);
+
+    public Task<ServiceResult<CompanySettingsResponse>> DeleteLogoAsync(
+        CancellationToken ct = default)
+        => inner.DeleteLogoAsync(ct);
 }

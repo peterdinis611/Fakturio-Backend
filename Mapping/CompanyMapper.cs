@@ -101,7 +101,7 @@ public static class CompanyMapper
     {
         company.Name = request.Name.Trim();
         company.LegalForm = Normalize(request.LegalForm);
-        company.Ico = Normalize(request.Ico);
+        company.Ico = Validation.SlovakValidators.NormalizeIco(request.Ico);
         company.Dic = Normalize(request.Dic);
         company.IcDph = Normalize(request.IcDph)?.ToUpperInvariant();
         company.IsVatPayer = request.IsVatPayer ?? company.IsVatPayer;

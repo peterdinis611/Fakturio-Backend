@@ -6,22 +6,33 @@ public static partial class SlovakValidators
 {
     private static readonly HashSet<decimal> AllowedVatRates = [0m, 5m, 19m, 23m];
 
-    public static bool BeValidIco(string? ico)
+    /// <summary>Removes spaces / whitespace so "57 267 073" is treated as IČO.</summary>
+    public static string? NormalizeIco(string? ico)
     {
         if (string.IsNullOrWhiteSpace(ico))
+            return null;
+
+        var digits = new string(ico.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        return digits.Length == 0 ? null : digits;
+    }
+
+    public static bool BeValidIco(string? ico)
+    {
+        var normalized = NormalizeIco(ico);
+        if (normalized is null)
             return true;
 
-        if (!EightDigitsRegex().IsMatch(ico))
+        if (!EightDigitsRegex().IsMatch(normalized))
             return false;
 
         // Official SK/CZ IČO checksum (mod 11)
         var sum = 0;
         for (var i = 0; i < 7; i++)
-            sum += (ico[i] - '0') * (8 - i);
+            sum += (normalized[i] - '0') * (8 - i);
 
         var remainder = sum % 11;
         var check = remainder == 0 ? 1 : remainder == 1 ? 0 : 11 - remainder;
-        return check == ico[7] - '0';
+        return check == normalized[7] - '0';
     }
 
     public static bool BeValidDic(string? dic)

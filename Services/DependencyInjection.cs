@@ -32,7 +32,9 @@ public static class DependencyInjection
         services.Configure<OverdueSyncOptions>(configuration.GetSection(OverdueSyncOptions.SectionName));
         services.Configure<ReminderJobOptions>(configuration.GetSection(ReminderJobOptions.SectionName));
         services.Configure<RegistryOptions>(configuration.GetSection(RegistryOptions.SectionName));
+        services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));
         services.AddSingleton<IJobSettingsStore, JobSettingsStore>();
+        services.AddSingleton<ILogoStorageService, LogoStorageService>();
 
         var registry = configuration.GetSection(RegistryOptions.SectionName).Get<RegistryOptions>()
             ?? new RegistryOptions();

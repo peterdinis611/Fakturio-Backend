@@ -32,4 +32,10 @@ public interface ICompanyService
     Task<ServiceResult<CompanySettingsResponse>> UpdateContactAsync(
         UpdateCompanyContactRequest request,
         CancellationToken ct = default);
+
+    Task<ServiceResult<CompanySettingsResponse>> UploadLogoAsync(
+        IFormFile file,
+        CancellationToken ct = default);
+
+    Task<ServiceResult<CompanySettingsResponse>> DeleteLogoAsync(CancellationToken ct = default);
 }

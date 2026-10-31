@@ -9,8 +9,8 @@ namespace Fakturio.Api.Controllers;
 public sealed class RegistryController(ICompanyRegistryService registry) : ApiControllerBase
 {
     /// <summary>
-    /// Look up a company in the public CZ (ARES) or SK (RPO) register by IČO.
-    /// Country: <c>SK</c> or <c>CZ</c> (case-insensitive).
+    /// Look up a company in the public CZ (ARES) or SK (RPO + FS tax IDs) register by IČO.
+    /// SK responses include DIČ / IČ DPH when available. Country: <c>SK</c> or <c>CZ</c>.
     /// </summary>
     [HttpGet("{country}/{ico}")]
     [ProducesResponseType(typeof(RegistryCompanyResponse), StatusCodes.Status200OK)]

@@ -84,6 +84,14 @@ try
         app.MapFakturioOpenApi();
     }
 
+    var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "uploads");
+    Directory.CreateDirectory(Path.Combine(uploadsRoot, "logos"));
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
+        RequestPath = "/uploads",
+    });
+
     app.UseFakturioMiddleware();
     app.UseFakturioRequestLogging();
     app.UseExceptionHandler();

@@ -6,6 +6,7 @@ using Fakturio.Api.Interfaces;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
 using Fakturio.Api.Services.Common;
+using Fakturio.Api.Validation;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Customers;
@@ -95,8 +96,8 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
 
     public async Task<CustomerResponse?> GetByIcoAsync(string ico, CancellationToken ct = default)
     {
-        var normalized = ico?.Trim();
-        if (string.IsNullOrWhiteSpace(normalized))
+        var normalized = SlovakValidators.NormalizeIco(ico);
+        if (normalized is null)
             return null;
 
         var customer = await db.Customers
@@ -159,10 +160,10 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         if (string.IsNullOrWhiteSpace(request.Name))
             return ServiceResult<CustomerResponse>.BadRequest("Name is required.", ErrorCodes.BadRequest);
 
-        if (!string.IsNullOrWhiteSpace(request.Ico))
+        var createIco = SlovakValidators.NormalizeIco(request.Ico);
+        if (createIco is not null)
         {
-            var ico = request.Ico.Trim();
-            var exists = await db.Customers.AnyAsync(c => c.Ico == ico, ct);
+            var exists = await db.Customers.AnyAsync(c => c.Ico == createIco, ct);
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",
@@ -203,10 +204,10 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         if (customer is null)
             return ServiceResult<CustomerResponse>.NotFound("Customer not found.", ErrorCodes.NotFound);
 
-        if (!string.IsNullOrWhiteSpace(request.Ico))
+        var updateIco = SlovakValidators.NormalizeIco(request.Ico);
+        if (updateIco is not null)
         {
-            var ico = request.Ico.Trim();
-            var exists = await db.Customers.AnyAsync(c => c.Id != id && c.Ico == ico, ct);
+            var exists = await db.Customers.AnyAsync(c => c.Id != id && c.Ico == updateIco, ct);
             if (exists)
                 return ServiceResult<CustomerResponse>.Conflict(
                     "A customer with this IČO already exists.",

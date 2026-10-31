@@ -55,7 +55,7 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
         RuleFor(x => x.Phone).MaximumLength(50);
         RuleFor(x => x.Website)
             .MaximumLength(300)
-            .Must(BeValidUrl)
+            .Must(BeValidAbsoluteUrl)
             .When(x => !string.IsNullOrWhiteSpace(x.Website))
             .WithMessage("Website must be a valid http(s) URL.");
 
@@ -111,14 +111,15 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
 
         RuleFor(x => x.LogoUrl)
             .MaximumLength(500)
-            .Must(BeValidUrl)
+            .Must(BeValidLogoUrl)
             .When(x => !string.IsNullOrWhiteSpace(x.LogoUrl))
-            .WithMessage("LogoUrl must be a valid http(s) URL.");
+            .WithMessage("LogoUrl must be a valid http(s) URL or /uploads path.");
     }
 
-    private static bool BeValidUrl(string? url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri)
-        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+    private static bool BeValidLogoUrl(string? url) =>
+        (!string.IsNullOrWhiteSpace(url) && url.StartsWith("/uploads/", StringComparison.Ordinal))
+        || (Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps));
 }
 
 public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCompanyDefaultsRequest>
@@ -213,13 +214,13 @@ public class UpdateCompanyBrandingRequestValidator : AbstractValidator<UpdateCom
     {
         RuleFor(x => x.LogoUrl)
             .MaximumLength(500)
-            .Must(BeValidUrl)
+            .Must(BeValidLogoUrl)
             .When(x => !string.IsNullOrWhiteSpace(x.LogoUrl))
-            .WithMessage("LogoUrl must be a valid http(s) URL.");
+            .WithMessage("LogoUrl must be a valid http(s) URL or /uploads path.");
 
         RuleFor(x => x.Website)
             .MaximumLength(300)
-            .Must(BeValidUrl)
+            .Must(BeValidAbsoluteUrl)
             .When(x => !string.IsNullOrWhiteSpace(x.Website))
             .WithMessage("Website must be a valid http(s) URL.");
 
@@ -237,9 +238,13 @@ public class UpdateCompanyBrandingRequestValidator : AbstractValidator<UpdateCom
         || x.Notes is not null
         || x.InvoiceFooter is not null;
 
-    private static bool BeValidUrl(string? url) =>
+    private static bool BeValidAbsoluteUrl(string? url) =>
         Uri.TryCreate(url, UriKind.Absolute, out var uri)
         && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+    private static bool BeValidLogoUrl(string? url) =>
+        (!string.IsNullOrWhiteSpace(url) && url.StartsWith("/uploads/", StringComparison.Ordinal))
+        || BeValidAbsoluteUrl(url);
 }
 
 public class UpdateCompanyContactRequestValidator : AbstractValidator<UpdateCompanyContactRequest>

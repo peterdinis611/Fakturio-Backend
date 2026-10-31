@@ -27,7 +27,7 @@ public sealed class CompanyRegistryService(
         CancellationToken ct = default)
     {
         var normalizedCountry = (country ?? string.Empty).Trim().ToUpperInvariant();
-        var normalizedIco = (ico ?? string.Empty).Trim();
+        var normalizedIco = SlovakValidators.NormalizeIco(ico);
 
         if (normalizedCountry is not ("SK" or "CZ"))
         {
@@ -36,7 +36,7 @@ public sealed class CompanyRegistryService(
                 ErrorCodes.UnsupportedCountry);
         }
 
-        if (string.IsNullOrWhiteSpace(normalizedIco) || !SlovakValidators.BeValidIco(normalizedIco))
+        if (normalizedIco is null || !SlovakValidators.BeValidIco(normalizedIco))
         {
             return ServiceResult<RegistryCompanyResponse>.BadRequest(
                 "IČO must be 8 digits with a valid checksum.",
@@ -238,9 +238,11 @@ public sealed class CompanyRegistryService(
             if (icDph is not null && !SlovakValidators.BeValidIcDph(icDph))
                 icDph = null;
 
-            bool? isVatPayer = icDph is not null ? true : tax.IcDph is null && dic is not null
-                ? false
-                : null;
+            bool? isVatPayer = icDph is not null
+                ? true
+                : dic is not null
+                    ? false
+                    : null;
 
             var commercialRegister = company.CommercialRegister
                 ?? FormatSubjektRegistration(tax.Registration);

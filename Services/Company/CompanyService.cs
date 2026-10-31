@@ -10,7 +10,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Company;
 
-public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompanyService
+public class CompanyService(
+    AppDbContext db,
+    ICacheInvalidator cache,
+    ILogoStorageService logos) : ICompanyService
 {
     public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
@@ -93,6 +96,41 @@ public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompany
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyContact(company, request);
         await SaveAndInvalidateAsync(ct);
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> UploadLogoAsync(
+        IFormFile file,
+        CancellationToken ct = default)
+    {
+        var saved = await logos.SaveAsync(file, ct);
+        if (!saved.Success || saved.Data is null)
+            return ServiceResult<CompanySettingsResponse>.Fail(
+                saved.Error ?? "Upload failed.",
+                saved.StatusCode,
+                saved.ErrorCode);
+
+        var company = await GetOrCreateAsync(ct);
+        var previous = company.LogoUrl;
+        company.LogoUrl = saved.Data;
+        company.UpdatedAt = DateTime.UtcNow;
+        await SaveAndInvalidateAsync(ct);
+
+        if (!string.Equals(previous, saved.Data, StringComparison.OrdinalIgnoreCase))
+            await logos.DeleteIfLocalAsync(previous, ct);
+
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> DeleteLogoAsync(
+        CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        var previous = company.LogoUrl;
+        company.LogoUrl = null;
+        company.UpdatedAt = DateTime.UtcNow;
+        await SaveAndInvalidateAsync(ct);
+        await logos.DeleteIfLocalAsync(previous, ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
