@@ -50,6 +50,12 @@ public static class DependencyInjection
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
+        services.AddHttpClient("subjekt", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.SubjektBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
 
         services.AddHostedService<OverdueSyncBackgroundService>();

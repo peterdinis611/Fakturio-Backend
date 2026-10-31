@@ -28,3 +28,15 @@ public record UserResponse(
     DateTime UpdatedAt,
     DateTime? LastSeenAt
 );
+
+public record UpdateUserRequest(
+    string? FirstName,
+    string? LastName,
+    string? ImageUrl,
+    string? Email
+);
+
+public record ChangePasswordRequest(
+    string CurrentPassword,
+    string NewPassword
+);

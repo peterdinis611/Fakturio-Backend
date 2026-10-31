@@ -30,6 +30,12 @@ public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompany
         return CompanyMapper.BuildCompleteness(company);
     }
 
+    public async Task<CompanyBankResponse> GetBankAsync(CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        return CompanyMapper.ToBank(company);
+    }
+
     public async Task<ServiceResult<CompanySettingsResponse>> UpdateAsync(
         UpdateCompanySettingsRequest request,
         CancellationToken ct = default)
@@ -56,6 +62,36 @@ public class CompanyService(AppDbContext db, ICacheInvalidator cache) : ICompany
     {
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyDefaults(company, request);
+        await SaveAndInvalidateAsync(ct);
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> UpdateBankAsync(
+        UpdateCompanyBankRequest request,
+        CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        CompanyMapper.ApplyBank(company, request);
+        await SaveAndInvalidateAsync(ct);
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> UpdateBrandingAsync(
+        UpdateCompanyBrandingRequest request,
+        CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        CompanyMapper.ApplyBranding(company, request);
+        await SaveAndInvalidateAsync(ct);
+        return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    public async Task<ServiceResult<CompanySettingsResponse>> UpdateContactAsync(
+        UpdateCompanyContactRequest request,
+        CancellationToken ct = default)
+    {
+        var company = await GetOrCreateAsync(ct);
+        CompanyMapper.ApplyContact(company, request);
         await SaveAndInvalidateAsync(ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }

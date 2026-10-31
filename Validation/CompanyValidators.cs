@@ -168,3 +168,119 @@ public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCom
         || x.DefaultInvoiceNotes is not null
         || x.InvoiceFooter is not null;
 }
+
+public class UpdateCompanyBankRequestValidator : AbstractValidator<UpdateCompanyBankRequest>
+{
+    private static readonly HashSet<string> AllowedPaymentMethods =
+        ["bank_transfer", "cash", "card", "other"];
+
+    public UpdateCompanyBankRequestValidator()
+    {
+        RuleFor(x => x.BankIban)
+            .Must(SlovakValidators.BeValidIban)
+            .WithMessage("IBAN is invalid.");
+
+        RuleFor(x => x.BankBic)
+            .Must(SlovakValidators.BeValidBic)
+            .WithMessage("BIC/SWIFT is invalid.");
+
+        RuleFor(x => x.BankName).MaximumLength(100);
+
+        RuleFor(x => x.DefaultPaymentMethod)
+            .Must(m => m is null || AllowedPaymentMethods.Contains(m))
+            .WithMessage("Payment method must be bank_transfer, cash, card, or other.");
+
+        RuleFor(x => x.DefaultConstantSymbol)
+            .Matches(@"^\d{1,4}$")
+            .When(x => !string.IsNullOrWhiteSpace(x.DefaultConstantSymbol));
+
+        RuleFor(x => x)
+            .Must(HasAtLeastOneField)
+            .WithMessage("At least one bank field must be provided.");
+    }
+
+    private static bool HasAtLeastOneField(UpdateCompanyBankRequest x) =>
+        x.BankIban is not null
+        || x.BankBic is not null
+        || x.BankName is not null
+        || x.DefaultPaymentMethod is not null
+        || x.DefaultConstantSymbol is not null;
+}
+
+public class UpdateCompanyBrandingRequestValidator : AbstractValidator<UpdateCompanyBrandingRequest>
+{
+    public UpdateCompanyBrandingRequestValidator()
+    {
+        RuleFor(x => x.LogoUrl)
+            .MaximumLength(500)
+            .Must(BeValidUrl)
+            .When(x => !string.IsNullOrWhiteSpace(x.LogoUrl))
+            .WithMessage("LogoUrl must be a valid http(s) URL.");
+
+        RuleFor(x => x.Website)
+            .MaximumLength(300)
+            .Must(BeValidUrl)
+            .When(x => !string.IsNullOrWhiteSpace(x.Website))
+            .WithMessage("Website must be a valid http(s) URL.");
+
+        RuleFor(x => x.Notes).MaximumLength(2000);
+        RuleFor(x => x.InvoiceFooter).MaximumLength(2000);
+
+        RuleFor(x => x)
+            .Must(HasAtLeastOneField)
+            .WithMessage("At least one branding field must be provided.");
+    }
+
+    private static bool HasAtLeastOneField(UpdateCompanyBrandingRequest x) =>
+        x.LogoUrl is not null
+        || x.Website is not null
+        || x.Notes is not null
+        || x.InvoiceFooter is not null;
+
+    private static bool BeValidUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+}
+
+public class UpdateCompanyContactRequestValidator : AbstractValidator<UpdateCompanyContactRequest>
+{
+    public UpdateCompanyContactRequestValidator()
+    {
+        RuleFor(x => x.Email)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.Email))
+            .MaximumLength(200);
+
+        RuleFor(x => x.InvoiceEmail)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.InvoiceEmail))
+            .MaximumLength(200);
+
+        RuleFor(x => x.Phone).MaximumLength(50);
+        RuleFor(x => x.ContactPerson).MaximumLength(200);
+        RuleFor(x => x.Street).MaximumLength(200);
+        RuleFor(x => x.City).MaximumLength(100);
+
+        RuleFor(x => x.PostalCode)
+            .Must(SlovakValidators.BeValidPostalCode)
+            .WithMessage("Postal code must look like 811 01.");
+
+        RuleFor(x => x.Country)
+            .Must(SlovakValidators.BeValidCountryCode)
+            .WithMessage("Country must be a 2-letter ISO code.");
+
+        RuleFor(x => x)
+            .Must(HasAtLeastOneField)
+            .WithMessage("At least one contact field must be provided.");
+    }
+
+    private static bool HasAtLeastOneField(UpdateCompanyContactRequest x) =>
+        x.Email is not null
+        || x.InvoiceEmail is not null
+        || x.Phone is not null
+        || x.ContactPerson is not null
+        || x.Street is not null
+        || x.City is not null
+        || x.PostalCode is not null
+        || x.Country is not null;
+}

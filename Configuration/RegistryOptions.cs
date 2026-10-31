@@ -10,5 +10,11 @@ public sealed class RegistryOptions
     public string RpoBaseUrl { get; set; } =
         "https://api.statistics.sk/rpo/v1/";
 
+    /// <summary>
+    /// Aggregates RPO + Finančná správa tax IDs (DIČ / IČ DPH) for Slovak entities.
+    /// </summary>
+    public string SubjektBaseUrl { get; set; } =
+        "https://api.subjekt.sk/v1/";
+
     public int TimeoutSeconds { get; set; } = 15;
 }

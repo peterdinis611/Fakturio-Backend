@@ -20,6 +20,7 @@ public static class CacheKeys
     public const string CompanySettings = "company:settings";
     public const string CompanySummary = "company:summary";
     public const string CompanyStatus = "company:status";
+    public const string CompanyBank = "company:bank";
 
     private static string Format(DateOnly? value) =>
         value?.ToString("yyyyMMdd") ?? "_";

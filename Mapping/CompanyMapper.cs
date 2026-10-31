@@ -157,6 +157,64 @@ public static class CompanyMapper
         company.UpdatedAt = DateTime.UtcNow;
     }
 
+    public static CompanyBankResponse ToBank(CompanySettings c) => new(
+        c.BankIban,
+        c.BankBic,
+        c.BankName,
+        c.DefaultPaymentMethod,
+        c.DefaultConstantSymbol);
+
+    public static void ApplyBank(CompanySettings company, UpdateCompanyBankRequest request)
+    {
+        if (request.BankIban is not null)
+            company.BankIban = Normalize(request.BankIban)?.Replace(" ", "", StringComparison.Ordinal).ToUpperInvariant();
+        if (request.BankBic is not null)
+            company.BankBic = Normalize(request.BankBic)?.ToUpperInvariant();
+        if (request.BankName is not null)
+            company.BankName = Normalize(request.BankName);
+        if (request.DefaultPaymentMethod is not null)
+            company.DefaultPaymentMethod = Normalize(request.DefaultPaymentMethod);
+        if (request.DefaultConstantSymbol is not null)
+            company.DefaultConstantSymbol = Normalize(request.DefaultConstantSymbol);
+        company.UpdatedAt = DateTime.UtcNow;
+    }
+
+    public static void ApplyBranding(CompanySettings company, UpdateCompanyBrandingRequest request)
+    {
+        if (request.LogoUrl is not null)
+            company.LogoUrl = Normalize(request.LogoUrl);
+        if (request.Website is not null)
+            company.Website = Normalize(request.Website);
+        if (request.Notes is not null)
+            company.Notes = Normalize(request.Notes);
+        if (request.InvoiceFooter is not null)
+            company.InvoiceFooter = Normalize(request.InvoiceFooter);
+        company.UpdatedAt = DateTime.UtcNow;
+    }
+
+    public static void ApplyContact(CompanySettings company, UpdateCompanyContactRequest request)
+    {
+        if (request.Email is not null)
+            company.Email = Normalize(request.Email);
+        if (request.InvoiceEmail is not null)
+            company.InvoiceEmail = Normalize(request.InvoiceEmail);
+        if (request.Phone is not null)
+            company.Phone = Normalize(request.Phone);
+        if (request.ContactPerson is not null)
+            company.ContactPerson = Normalize(request.ContactPerson);
+        if (request.Street is not null)
+            company.Street = Normalize(request.Street);
+        if (request.City is not null)
+            company.City = Normalize(request.City);
+        if (request.PostalCode is not null)
+            company.PostalCode = Normalize(request.PostalCode);
+        if (request.Country is not null)
+            company.Country = string.IsNullOrWhiteSpace(request.Country)
+                ? company.Country
+                : request.Country.Trim().ToUpperInvariant();
+        company.UpdatedAt = DateTime.UtcNow;
+    }
+
     private static CompanyCompletenessItem Item(
         string key,
         string label,

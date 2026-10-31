@@ -43,6 +43,40 @@ public record UpdateCompanyDefaultsRequest(
     string? InvoiceFooter
 );
 
+public record UpdateCompanyBankRequest(
+    string? BankIban,
+    string? BankBic,
+    string? BankName,
+    string? DefaultPaymentMethod,
+    string? DefaultConstantSymbol
+);
+
+public record UpdateCompanyBrandingRequest(
+    string? LogoUrl,
+    string? Website,
+    string? Notes,
+    string? InvoiceFooter
+);
+
+public record UpdateCompanyContactRequest(
+    string? Email,
+    string? InvoiceEmail,
+    string? Phone,
+    string? ContactPerson,
+    string? Street,
+    string? City,
+    string? PostalCode,
+    string? Country
+);
+
+public record CompanyBankResponse(
+    string? BankIban,
+    string? BankBic,
+    string? BankName,
+    string? DefaultPaymentMethod,
+    string? DefaultConstantSymbol
+);
+
 public record CompanySettingsResponse(
     Guid Id,
     string Name,

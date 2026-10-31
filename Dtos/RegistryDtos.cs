@@ -1,6 +1,6 @@
 namespace Fakturio.Api.Dtos;
 
-/// <summary>Normalized company record from a public business register (ARES / RPO).</summary>
+/// <summary>Normalized company record from a public business register (ARES / RPO / FS).</summary>
 public record RegistryCompanyResponse(
     string Country,
     string Source,
@@ -8,6 +8,7 @@ public record RegistryCompanyResponse(
     string Name,
     string? LegalForm,
     string? Dic,
+    string? IcDph,
     string? Street,
     string? City,
     string? PostalCode,

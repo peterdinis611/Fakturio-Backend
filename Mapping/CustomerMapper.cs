@@ -21,6 +21,12 @@ public static class CustomerMapper
         invoiceCount
     );
 
+    public static CustomerLookupItem ToLookupItem(Customer c) => new(
+        c.Id,
+        c.Name,
+        c.Ico,
+        c.City);
+
     public static void Apply(Customer customer, CreateCustomerRequest request)
     {
         customer.Name = request.Name.Trim();

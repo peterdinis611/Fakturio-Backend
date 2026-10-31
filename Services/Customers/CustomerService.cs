@@ -52,6 +52,31 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
             (int)Math.Ceiling(totalCount / (double)pageSize));
     }
 
+    public async Task<IReadOnlyList<CustomerLookupItem>> LookupAsync(
+        string? search,
+        int limit = 20,
+        CancellationToken ct = default)
+    {
+        limit = Math.Clamp(limit, 1, 100);
+        var term = ServiceGuards.NormalizeOptionalSearch(search);
+
+        var query = db.Customers.AsNoTracking().AsQueryable();
+        if (term is not null)
+        {
+            query = query.Where(c =>
+                c.Name.Contains(term) ||
+                (c.Ico != null && c.Ico.Contains(term)) ||
+                (c.City != null && c.City.Contains(term)));
+        }
+
+        var items = await query
+            .OrderBy(c => c.Name)
+            .Take(limit)
+            .ToListAsync(ct);
+
+        return items.Select(CustomerMapper.ToLookupItem).ToList();
+    }
+
     public async Task<CustomerResponse?> GetAsync(Guid id, CancellationToken ct = default)
     {
         if (id == Guid.Empty)
@@ -66,6 +91,65 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache) : ICustom
         return customer is null
             ? null
             : CustomerMapper.ToResponse(customer.Customer, customer.InvoiceCount);
+    }
+
+    public async Task<CustomerResponse?> GetByIcoAsync(string ico, CancellationToken ct = default)
+    {
+        var normalized = ico?.Trim();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return null;
+
+        var customer = await db.Customers
+            .AsNoTracking()
+            .Where(c => c.Ico == normalized)
+            .Select(c => new { Customer = c, InvoiceCount = c.Invoices.Count })
+            .FirstOrDefaultAsync(ct);
+
+        return customer is null
+            ? null
+            : CustomerMapper.ToResponse(customer.Customer, customer.InvoiceCount);
+    }
+
+    public async Task<CustomerSummaryResponse?> GetSummaryAsync(Guid id, CancellationToken ct = default)
+    {
+        if (id == Guid.Empty)
+            return null;
+
+        var customer = await db.Customers.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id, ct);
+        if (customer is null)
+            return null;
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var invoices = await db.Invoices
+            .AsNoTracking()
+            .Where(i => i.CustomerId == id && i.DocumentType != InvoiceDocumentType.Proforma)
+            .ToListAsync(ct);
+
+        decimal SumSigned(IEnumerable<Invoice> list) =>
+            list.Sum(InvoiceMapper.SignedTotal);
+
+        var draft = invoices.Count(i => i.Status == InvoiceStatus.Draft);
+        var issued = invoices.Count(i => i.Status == InvoiceStatus.Issued);
+        var paid = invoices.Count(i => i.Status == InvoiceStatus.Paid);
+        var cancelled = invoices.Count(i => i.Status == InvoiceStatus.Cancelled);
+        var overdue = invoices.Count(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue);
+
+        return new CustomerSummaryResponse(
+            customer.Id,
+            customer.Name,
+            customer.Ico,
+            invoices.Count,
+            draft,
+            issued,
+            paid,
+            overdue,
+            cancelled,
+            SumSigned(invoices.Where(i => i.Status != InvoiceStatus.Cancelled)),
+            SumSigned(invoices.Where(i => i.Status == InvoiceStatus.Paid)),
+            SumSigned(invoices.Where(i => i.Status is InvoiceStatus.Issued or InvoiceStatus.Overdue)),
+            SumSigned(invoices.Where(i => InvoiceMapper.IsOverdue(i, today) || i.Status == InvoiceStatus.Overdue)),
+            invoices.FirstOrDefault()?.Currency ?? "EUR",
+            invoices.Count == 0 ? null : invoices.Max(i => i.IssueDate));
     }
 
     public async Task<ServiceResult<CustomerResponse>> CreateAsync(

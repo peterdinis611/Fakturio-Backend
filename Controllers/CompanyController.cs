@@ -23,6 +23,11 @@ public sealed class CompanyController(ICompanyService company) : ApiControllerBa
     public async Task<ActionResult<CompanyCompletenessResponse>> Status(CancellationToken ct)
         => Ok(await company.GetStatusAsync(ct));
 
+    [HttpGet("bank")]
+    [ProducesResponseType(typeof(CompanyBankResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanyBankResponse>> Bank(CancellationToken ct)
+        => Ok(await company.GetBankAsync(ct));
+
     [HttpPut]
     [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CompanySettingsResponse>> Update(
@@ -36,4 +41,25 @@ public sealed class CompanyController(ICompanyService company) : ApiControllerBa
         [FromBody] UpdateCompanyDefaultsRequest request,
         CancellationToken ct)
         => (await company.UpdateDefaultsAsync(request, ct)).ToActionResult(this);
+
+    [HttpPatch("bank")]
+    [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanySettingsResponse>> UpdateBank(
+        [FromBody] UpdateCompanyBankRequest request,
+        CancellationToken ct)
+        => (await company.UpdateBankAsync(request, ct)).ToActionResult(this);
+
+    [HttpPatch("branding")]
+    [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanySettingsResponse>> UpdateBranding(
+        [FromBody] UpdateCompanyBrandingRequest request,
+        CancellationToken ct)
+        => (await company.UpdateBrandingAsync(request, ct)).ToActionResult(this);
+
+    [HttpPatch("contact")]
+    [ProducesResponseType(typeof(CompanySettingsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CompanySettingsResponse>> UpdateContact(
+        [FromBody] UpdateCompanyContactRequest request,
+        CancellationToken ct)
+        => (await company.UpdateContactAsync(request, ct)).ToActionResult(this);
 }

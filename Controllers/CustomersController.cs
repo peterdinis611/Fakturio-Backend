@@ -18,6 +18,22 @@ public sealed class CustomersController(ICustomerService customers) : ApiControl
         CancellationToken ct = default)
         => Ok(await customers.ListAsync(page, pageSize, search, ct));
 
+    [HttpGet("lookup")]
+    [ProducesResponseType(typeof(IReadOnlyList<CustomerLookupItem>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<CustomerLookupItem>>> Lookup(
+        [FromQuery] string? search = null,
+        [FromQuery] int limit = 20,
+        CancellationToken ct = default)
+        => Ok(await customers.LookupAsync(search, limit, ct));
+
+    [HttpGet("by-ico/{ico}")]
+    [ProducesResponseType(typeof(CustomerResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CustomerResponse>> GetByIco(string ico, CancellationToken ct)
+        => OkOrNotFound(
+            await customers.GetByIcoAsync(ico, ct),
+            "Customer not found.",
+            ErrorCodes.CustomerNotFound);
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(CustomerResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<CustomerResponse>> Get(Guid id, CancellationToken ct)
@@ -25,6 +41,14 @@ public sealed class CustomersController(ICustomerService customers) : ApiControl
             await customers.GetAsync(id, ct),
             "Customer not found.",
             ErrorCodes.NotFound);
+
+    [HttpGet("{id:guid}/summary")]
+    [ProducesResponseType(typeof(CustomerSummaryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CustomerSummaryResponse>> Summary(Guid id, CancellationToken ct)
+        => OkOrNotFound(
+            await customers.GetSummaryAsync(id, ct),
+            "Customer not found.",
+            ErrorCodes.CustomerNotFound);
 
     [HttpPost]
     [ProducesResponseType(typeof(CustomerResponse), StatusCodes.Status201Created)]

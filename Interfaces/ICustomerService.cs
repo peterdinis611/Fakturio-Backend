@@ -11,7 +11,16 @@ public interface ICustomerService
         string? search,
         CancellationToken ct = default);
 
+    Task<IReadOnlyList<CustomerLookupItem>> LookupAsync(
+        string? search,
+        int limit = 20,
+        CancellationToken ct = default);
+
     Task<CustomerResponse?> GetAsync(Guid id, CancellationToken ct = default);
+
+    Task<CustomerResponse?> GetByIcoAsync(string ico, CancellationToken ct = default);
+
+    Task<CustomerSummaryResponse?> GetSummaryAsync(Guid id, CancellationToken ct = default);
 
     Task<ServiceResult<CustomerResponse>> CreateAsync(
         CreateCustomerRequest request,

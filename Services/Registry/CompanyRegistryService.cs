@@ -118,6 +118,7 @@ public sealed class CompanyRegistryService(
             Name: payload.ObchodniJmeno.Trim(),
             LegalForm: null,
             Dic: NormalizeOptional(payload.Dic),
+            IcDph: null,
             Street: street,
             City: city,
             PostalCode: postal,
@@ -182,19 +183,102 @@ public sealed class CompanyRegistryService(
         var registrationNumber = CurrentRegistrationNumber(detail?.SourceRegister)
             ?? CurrentRegistrationNumber(match.SourceRegister);
 
-        return ServiceResult<RegistryCompanyResponse>.Ok(new RegistryCompanyResponse(
+        var company = new RegistryCompanyResponse(
             Country: "SK",
             Source: "rpo",
             Ico: ico,
             Name: name.Trim(),
             LegalForm: legalForm,
             Dic: null,
+            IcDph: null,
             Street: street,
             City: city,
             PostalCode: postal,
             CountryCode: "SK",
             IsVatPayer: null,
-            CommercialRegister: registrationNumber));
+            CommercialRegister: registrationNumber);
+
+        return ServiceResult<RegistryCompanyResponse>.Ok(
+            await EnrichSlovakTaxIdsAsync(company, ct));
+    }
+
+    /// <summary>
+    /// RPO has no tax IDs — enrich DIČ / IČ DPH / VAT status from Subjekt (FS-backed).
+    /// Failures are non-fatal; RPO identity/address still return.
+    /// </summary>
+    private async Task<RegistryCompanyResponse> EnrichSlovakTaxIdsAsync(
+        RegistryCompanyResponse company,
+        CancellationToken ct)
+    {
+        try
+        {
+            var client = httpClientFactory.CreateClient("subjekt");
+            using var response = await client.GetAsync(
+                $"entity/{Uri.EscapeDataString(company.Ico)}?country=sk",
+                ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogDebug(
+                    "Subjekt tax enrichment returned {StatusCode} for IČO {Ico}",
+                    (int)response.StatusCode,
+                    company.Ico);
+                return company;
+            }
+
+            var tax = await response.Content.ReadFromJsonAsync<SubjektEntity>(JsonOptions, ct);
+            if (tax is null)
+                return company;
+
+            var dic = NormalizeOptional(tax.Dic);
+            if (dic is not null && !SlovakValidators.BeValidDic(dic))
+                dic = null;
+
+            var icDph = NormalizeOptional(tax.IcDph)?.ToUpperInvariant();
+            if (icDph is not null && !SlovakValidators.BeValidIcDph(icDph))
+                icDph = null;
+
+            bool? isVatPayer = icDph is not null ? true : tax.IcDph is null && dic is not null
+                ? false
+                : null;
+
+            var commercialRegister = company.CommercialRegister
+                ?? FormatSubjektRegistration(tax.Registration);
+
+            return company with
+            {
+                Dic = dic ?? company.Dic,
+                IcDph = icDph ?? company.IcDph,
+                IsVatPayer = isVatPayer ?? company.IsVatPayer,
+                CommercialRegister = commercialRegister,
+                Source = dic is not null || icDph is not null ? "rpo+fs" : company.Source
+            };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Subjekt tax enrichment failed for IČO {Ico}", company.Ico);
+            return company;
+        }
+    }
+
+    private static string? FormatSubjektRegistration(SubjektRegistration? registration)
+    {
+        if (registration is null)
+            return null;
+
+        var office = NormalizeOptional(registration.Office);
+        var number = NormalizeOptional(registration.Number);
+        if (office is null && number is null)
+            return null;
+        if (office is null)
+            return number;
+        if (number is null)
+            return office;
+        return $"{office}, {number}";
     }
 
     private static string? FormatCzStreet(AresAddress? sidlo)
@@ -385,5 +469,19 @@ public sealed class CompanyRegistryService(
     private sealed class RpoSourceRegister
     {
         public List<RpoTimedValue>? RegistrationNumbers { get; set; }
+    }
+
+    private sealed class SubjektEntity
+    {
+        public string? Dic { get; set; }
+        [JsonPropertyName("ic_dph")]
+        public string? IcDph { get; set; }
+        public SubjektRegistration? Registration { get; set; }
+    }
+
+    private sealed class SubjektRegistration
+    {
+        public string? Office { get; set; }
+        public string? Number { get; set; }
     }
 }

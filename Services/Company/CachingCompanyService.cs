@@ -52,6 +52,19 @@ public sealed class CachingCompanyService(
             cancellationToken: ct).AsTask();
     }
 
+    public Task<CompanyBankResponse> GetBankAsync(CancellationToken ct = default)
+    {
+        if (!options.Value.Enabled)
+            return inner.GetBankAsync(ct);
+
+        return cache.GetOrCreateAsync(
+            CacheKeys.CompanyBank,
+            async cancel => await inner.GetBankAsync(cancel),
+            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
+            tags: [CacheTags.Company],
+            cancellationToken: ct).AsTask();
+    }
+
     public Task<ServiceResult<CompanySettingsResponse>> UpdateAsync(
         UpdateCompanySettingsRequest request,
         CancellationToken ct = default)
@@ -61,4 +74,19 @@ public sealed class CachingCompanyService(
         UpdateCompanyDefaultsRequest request,
         CancellationToken ct = default)
         => inner.UpdateDefaultsAsync(request, ct);
+
+    public Task<ServiceResult<CompanySettingsResponse>> UpdateBankAsync(
+        UpdateCompanyBankRequest request,
+        CancellationToken ct = default)
+        => inner.UpdateBankAsync(request, ct);
+
+    public Task<ServiceResult<CompanySettingsResponse>> UpdateBrandingAsync(
+        UpdateCompanyBrandingRequest request,
+        CancellationToken ct = default)
+        => inner.UpdateBrandingAsync(request, ct);
+
+    public Task<ServiceResult<CompanySettingsResponse>> UpdateContactAsync(
+        UpdateCompanyContactRequest request,
+        CancellationToken ct = default)
+        => inner.UpdateContactAsync(request, ct);
 }
