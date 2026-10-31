@@ -116,10 +116,13 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
             .WithMessage("LogoUrl must be a valid http(s) URL or /uploads path.");
     }
 
+    private static bool BeValidAbsoluteUrl(string? url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
     private static bool BeValidLogoUrl(string? url) =>
         (!string.IsNullOrWhiteSpace(url) && url.StartsWith("/uploads/", StringComparison.Ordinal))
-        || (Uri.TryCreate(url, UriKind.Absolute, out var uri)
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps));
+        || BeValidAbsoluteUrl(url);
 }
 
 public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCompanyDefaultsRequest>
