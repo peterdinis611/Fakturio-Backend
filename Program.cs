@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Fakturio.Api.Data;
 using Fakturio.Api.Extensions;
+using Fakturio.Api.Hubs;
 using Fakturio.Api.Infrastructure;
 using Fakturio.Api.Services;
 using Fakturio.Api.Validation;
@@ -58,11 +59,18 @@ try
     builder.Services.AddApplicationCaching(builder.Configuration);
     builder.Services.AddApplicationServices(builder.Configuration);
     builder.Services.AddJwtAuthentication(builder.Configuration);
+    builder.Services.AddSignalR();
 
+    // SignalR negotiate uses credentials — AllowAnyOrigin is incompatible.
+    var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
+        ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
     builder.Services.AddCors(options =>
     {
         options.AddDefaultPolicy(policy =>
-            policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod());
+            policy.WithOrigins(corsOrigins)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials());
     });
 
     var connectionString = builder.Configuration.GetConnectionString("Default")
@@ -100,6 +108,7 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHub<SignalHub>("/hubs/signal");
 
     app.Run();
 }

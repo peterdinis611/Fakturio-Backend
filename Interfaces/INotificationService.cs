@@ -24,4 +24,7 @@ public interface INotificationService
         Guid? invoiceId,
         string? invoiceNumber,
         CancellationToken ct = default);
+
+    /// <summary>Pushes a sample notification to the current user (bypasses quiet hours).</summary>
+    Task<NotificationResponse> PublishTestAsync(CancellationToken ct = default);
 }

@@ -41,4 +41,9 @@ public sealed class NotificationsController(INotificationService notifications) 
         [FromBody] UpdateNotificationPreferencesRequest request,
         CancellationToken ct)
         => Ok(await notifications.UpdatePreferencesAsync(request, ct));
+
+    [HttpPost("test")]
+    [ProducesResponseType(typeof(NotificationResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<NotificationResponse>> SendTest(CancellationToken ct)
+        => Ok(await notifications.PublishTestAsync(ct));
 }

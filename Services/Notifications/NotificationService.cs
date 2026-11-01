@@ -56,7 +56,7 @@ public sealed class NotificationService(
                 .SendAsync("unreadCount", await UnreadCountFor(userId, ct), ct);
         }
 
-        return ServiceResult.Ok();
+        return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 
     public async Task<ServiceResult> MarkAllReadAsync(CancellationToken ct = default)
@@ -80,7 +80,7 @@ public sealed class NotificationService(
                 .SendAsync("unreadCount", 0, ct);
         }
 
-        return ServiceResult.Ok();
+        return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 
     public async Task<NotificationPreferencesResponse> GetPreferencesAsync(CancellationToken ct = default)
@@ -159,12 +159,39 @@ public sealed class NotificationService(
         await db.SaveChangesAsync(ct);
 
         var response = ToResponse(entity);
+        await PushAsync(userId, response, ct);
+        return response;
+    }
+
+    public async Task<NotificationResponse> PublishTestAsync(CancellationToken ct = default)
+    {
+        var userId = await tenant.GetUserIdAsync(ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+
+        var entity = new AppNotification
+        {
+            UserId = userId,
+            CompanyId = companyId,
+            Kind = NotificationKind.System,
+            Title = "Skúšobná notifikácia",
+            Body = "Signal Hub je pripojený — toto je test do zvončeka.",
+            Href = "/settings/notifications",
+        };
+
+        db.Notifications.Add(entity);
+        await db.SaveChangesAsync(ct);
+
+        var response = ToResponse(entity);
+        await PushAsync(userId, response, ct);
+        return response;
+    }
+
+    private async Task PushAsync(Guid userId, NotificationResponse response, CancellationToken ct)
+    {
         await hub.Clients.Group(SignalHub.UserGroup(userId))
             .SendAsync("notification", response, ct);
         await hub.Clients.Group(SignalHub.UserGroup(userId))
             .SendAsync("unreadCount", await UnreadCountFor(userId, ct), ct);
-
-        return response;
     }
 
     private async Task<NotificationPreferences> GetOrCreatePreferencesAsync(CancellationToken ct)

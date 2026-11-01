@@ -65,7 +65,8 @@ public static class DependencyInjection
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
 
         services.AddHostedService<OverdueSyncBackgroundService>();
-        services.AddScoped<IReminderNotifier, LoggingReminderNotifier>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IReminderNotifier, SignalHubReminderNotifier>();
         services.AddHostedService<ReminderBackgroundService>();
 
         services.AddHttpContextAccessor();
