@@ -156,11 +156,17 @@ namespace Fakturio.Api.Data.Migrations
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Website")
                         .HasMaxLength(300)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("UserId")
+                        .IsUnique();
 
                     b.ToTable("CompanySettings");
                 });
@@ -173,6 +179,9 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.Property<string>("City")
                         .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Country")
@@ -220,6 +229,10 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "Ico");
+
                     b.HasIndex("Ico");
 
                     b.ToTable("Customers");
@@ -244,6 +257,9 @@ namespace Fakturio.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateOnly?>("CancelledAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("ConstantSymbol")
@@ -411,6 +427,11 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "Number")
+                        .IsUnique();
+
                     b.HasIndex("CustomerId");
 
                     b.HasIndex("DocumentType");
@@ -418,9 +439,6 @@ namespace Fakturio.Api.Data.Migrations
                     b.HasIndex("DueDate");
 
                     b.HasIndex("IssueDate");
-
-                    b.HasIndex("Number")
-                        .IsUnique();
 
                     b.HasIndex("RelatedInvoiceId");
 
@@ -539,6 +557,9 @@ namespace Fakturio.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -572,6 +593,8 @@ namespace Fakturio.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("IsActive");
 
@@ -703,6 +726,9 @@ namespace Fakturio.Api.Data.Migrations
                     .HasMaxLength(16000)
                     .HasColumnType("TEXT");
 
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("TEXT");
 
@@ -719,11 +745,118 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("IsPinned");
 
                     b.HasIndex("UpdatedAt");
 
                     b.ToTable("Notes");
+                });
+
+            modelBuilder.Entity("Fakturio.Api.Models.RecurringInvoice", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DayOfMonth")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DueDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Interval")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateOnly?>("LastGeneratedOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("LastInvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateOnly>("NextRunOn")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("CompanyId", "IsActive", "NextRunOn");
+
+                    b.HasIndex("CustomerId");
+
+                    b.ToTable("RecurringInvoices");
+                });
+
+            modelBuilder.Entity("Fakturio.Api.Models.RecurringInvoiceItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Quantity")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RecurringInvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ServiceCatalogItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Unit")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("ks");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("VatRate")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RecurringInvoiceId");
+
+                    b.ToTable("RecurringInvoiceItems");
                 });
 
             modelBuilder.Entity("Fakturio.Api.Models.AppUser", b =>
@@ -771,6 +904,17 @@ namespace Fakturio.Api.Data.Migrations
                     b.ToTable("Users");
                 });
 
+            modelBuilder.Entity("Fakturio.Api.Models.CompanySettings", b =>
+                {
+                    b.HasOne("Fakturio.Api.Models.AppUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Fakturio.Api.Models.Invoice", b =>
                 {
                     b.HasOne("Fakturio.Api.Models.Customer", "Customer")
@@ -800,12 +944,39 @@ namespace Fakturio.Api.Data.Migrations
                     b.Navigation("Invoice");
                 });
 
+            modelBuilder.Entity("Fakturio.Api.Models.RecurringInvoice", b =>
+                {
+                    b.HasOne("Fakturio.Api.Models.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("Fakturio.Api.Models.RecurringInvoiceItem", b =>
+                {
+                    b.HasOne("Fakturio.Api.Models.RecurringInvoice", "RecurringInvoice")
+                        .WithMany("Items")
+                        .HasForeignKey("RecurringInvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RecurringInvoice");
+                });
+
             modelBuilder.Entity("Fakturio.Api.Models.Customer", b =>
                 {
                     b.Navigation("Invoices");
                 });
 
             modelBuilder.Entity("Fakturio.Api.Models.Invoice", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Fakturio.Api.Models.RecurringInvoice", b =>
                 {
                     b.Navigation("Items");
                 });
