@@ -17,6 +17,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Note> Notes => Set<Note>();
     public DbSet<RecurringInvoice> RecurringInvoices => Set<RecurringInvoice>();
     public DbSet<RecurringInvoiceItem> RecurringInvoiceItems => Set<RecurringInvoiceItem>();
+    public DbSet<AppNotification> Notifications => Set<AppNotification>();
+    public DbSet<NotificationPreferences> NotificationPreferences => Set<NotificationPreferences>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -252,6 +254,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(r => r.Items)
                 .HasForeignKey(i => i.RecurringInvoiceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AppNotification>(entity =>
+        {
+            entity.HasKey(n => n.Id);
+            entity.Property(n => n.UserId).IsRequired();
+            entity.Property(n => n.CompanyId).IsRequired();
+            entity.Property(n => n.Title).HasMaxLength(200).IsRequired();
+            entity.Property(n => n.Body).HasMaxLength(1000).IsRequired();
+            entity.Property(n => n.Href).HasMaxLength(300);
+            entity.Property(n => n.InvoiceNumber).HasMaxLength(50);
+            entity.HasIndex(n => n.UserId);
+            entity.HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
+        });
+
+        modelBuilder.Entity<NotificationPreferences>(entity =>
+        {
+            entity.HasKey(p => p.Id);
+            entity.Property(p => p.UserId).IsRequired();
+            entity.HasIndex(p => p.UserId).IsUnique();
         });
     }
 }

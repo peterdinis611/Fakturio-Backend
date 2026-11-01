@@ -15,6 +15,7 @@ using Fakturio.Api.Services.Notes;
 using Fakturio.Api.Services.Payments;
 using Fakturio.Api.Services.Registry;
 using Fakturio.Api.Services.Reminders;
+using Fakturio.Api.Services.Notifications;
 using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Resume;
 using Fakturio.Api.Services.Search;

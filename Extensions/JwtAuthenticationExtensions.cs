@@ -36,6 +36,23 @@ public static class JwtAuthenticationExtensions
                     ClockSkew = TimeSpan.FromMinutes(1),
                     NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
                 };
+
+                // SignalR (browser WebSocket) sends JWT as ?access_token=
+                options.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+                        if (!string.IsNullOrEmpty(accessToken)
+                            && path.StartsWithSegments("/hubs"))
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+                };
             });
 
         services.AddAuthorization();
