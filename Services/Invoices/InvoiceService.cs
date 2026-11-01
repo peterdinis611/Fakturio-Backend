@@ -133,6 +133,11 @@ public class InvoiceService(
 
         var company = await db.CompanySettings.AsNoTracking()
             .FirstOrDefaultAsync(c => c.UserId == userId, ct);
+        if (company is null || !CompanyMapper.BuildCompleteness(company).IsReadyToInvoice)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Company is not ready for invoicing. Complete required company details first.",
+                ErrorCodes.CompanyNotReady);
+
         var issueDate = request.IssueDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var dueDays = company?.DefaultDueDays ?? 14;
         var dueDate = request.DueDate ?? issueDate.AddDays(dueDays);

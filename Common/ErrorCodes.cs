@@ -38,4 +38,5 @@ public static class ErrorCodes
 
     public const string FileTooLarge = "file_too_large";
     public const string InvalidFileType = "invalid_file_type";
+    public const string CompanyNotReady = "company_not_ready";
 }

@@ -71,6 +71,13 @@ public sealed class RecurringInvoiceService(
         CancellationToken ct = default)
     {
         var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == companyId, ct);
+        if (company is null || !CompanyMapper.BuildCompleteness(company).IsReadyToInvoice)
+            return ServiceResult<RecurringInvoiceResponse>.BadRequest(
+                "Company is not ready for invoicing. Complete required company details first.",
+                ErrorCodes.CompanyNotReady);
+
         var customer = await db.Customers.FirstOrDefaultAsync(
             c => c.Id == request.CustomerId && c.CompanyId == companyId, ct);
         if (customer is null)
@@ -80,9 +87,6 @@ public sealed class RecurringInvoiceService(
 
         if (ServiceGuards.EnsureHasItems(request.Items?.Count ?? 0) is { } itemsError)
             return Fail<RecurringInvoiceResponse>(itemsError);
-
-        var company = await db.CompanySettings.AsNoTracking()
-            .FirstOrDefaultAsync(c => c.Id == companyId, ct);
         var day = ClampDay(request.DayOfMonth ?? 1);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var next = request.NextRunOn ?? NextOccurrence(today, day, request.Interval, advanceIfPast: true);
@@ -174,6 +178,13 @@ public sealed class RecurringInvoiceService(
         CancellationToken ct = default)
     {
         var companyId = await tenant.GetCompanyIdAsync(ct);
+        var company = await db.CompanySettings.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == companyId, ct);
+        if (company is null || !CompanyMapper.BuildCompleteness(company).IsReadyToInvoice)
+            return ServiceResult<InvoiceResponse>.BadRequest(
+                "Company is not ready for invoicing. Complete required company details first.",
+                ErrorCodes.CompanyNotReady);
+
         var template = await db.RecurringInvoices
             .Include(r => r.Items)
             .Include(r => r.Customer)
@@ -221,6 +232,14 @@ public sealed class RecurringInvoiceService(
                 skipped++;
                 template.NextRunOn = Advance(template.NextRunOn, template.DayOfMonth, template.Interval);
                 template.UpdatedAt = DateTime.UtcNow;
+                continue;
+            }
+
+            var company = await db.CompanySettings.AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == template.CompanyId, ct);
+            if (company is null || !CompanyMapper.BuildCompleteness(company).IsReadyToInvoice)
+            {
+                skipped++;
                 continue;
             }
 
