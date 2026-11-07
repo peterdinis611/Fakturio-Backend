@@ -16,5 +16,15 @@ public sealed class RegistryOptions
     public string SubjektBaseUrl { get; set; } =
         "https://api.subjekt.sk/v1/";
 
+    /// <summary>Open Register of Slovak Firms — search + SK company detail.</summary>
+    public string OrsfBaseUrl { get; set; } = "https://api.orsf.sk/v1/";
+
+    /// <summary>EU VIES REST API for VAT ID checks.</summary>
+    public string ViesBaseUrl { get; set; } =
+        "https://ec.europa.eu/taxation_customs/vies/rest-api/";
+
+    /// <summary>Prefer ORSF over RPO for SK IČO lookup (falls back to RPO).</summary>
+    public bool PreferOrsf { get; set; } = true;
+
     public int TimeoutSeconds { get; set; } = 15;
 }

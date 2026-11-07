@@ -35,6 +35,9 @@ public static class ErrorCodes
     public const string UnsupportedCountry = "unsupported_country";
     public const string RegistryNotFound = "registry_not_found";
     public const string RegistryUnavailable = "registry_unavailable";
+    public const string InvalidVatId = "invalid_vat_id";
+    public const string ViesUnavailable = "vies_unavailable";
+    public const string FxUnavailable = "fx_unavailable";
 
     public const string FileTooLarge = "file_too_large";
     public const string InvalidFileType = "invalid_file_type";

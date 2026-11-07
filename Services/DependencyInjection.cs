@@ -13,6 +13,7 @@ using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Jobs;
 using Fakturio.Api.Services.Notes;
 using Fakturio.Api.Services.Payments;
+using Fakturio.Api.Services.Fx;
 using Fakturio.Api.Services.Registry;
 using Fakturio.Api.Services.Reminders;
 using Fakturio.Api.Services.Notifications;
@@ -36,6 +37,7 @@ public static class DependencyInjection
         services.Configure<OverdueSyncOptions>(configuration.GetSection(OverdueSyncOptions.SectionName));
         services.Configure<ReminderJobOptions>(configuration.GetSection(ReminderJobOptions.SectionName));
         services.Configure<RegistryOptions>(configuration.GetSection(RegistryOptions.SectionName));
+        services.Configure<FxOptions>(configuration.GetSection(FxOptions.SectionName));
         services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));
         services.AddSingleton<IJobSettingsStore, JobSettingsStore>();
         services.AddSingleton<ILogoStorageService, LogoStorageService>();
@@ -43,6 +45,7 @@ public static class DependencyInjection
         var registry = configuration.GetSection(RegistryOptions.SectionName).Get<RegistryOptions>()
             ?? new RegistryOptions();
         var timeout = TimeSpan.FromSeconds(Math.Clamp(registry.TimeoutSeconds, 5, 60));
+        var fx = configuration.GetSection(FxOptions.SectionName).Get<FxOptions>() ?? new FxOptions();
 
         services.AddHttpClient("ares", client =>
         {
@@ -62,7 +65,29 @@ public static class DependencyInjection
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
+        services.AddHttpClient("orsf", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.OrsfBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("vies", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.ViesBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
+        services.AddHttpClient("frankfurter", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(fx.FrankfurterBaseUrl));
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
+
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
+        services.AddScoped<IVatVerificationService, VatVerificationService>();
+        services.AddSingleton<IFxRateService, FrankfurterFxRateService>();
 
         services.AddHostedService<OverdueSyncBackgroundService>();
         services.AddScoped<INotificationService, NotificationService>();

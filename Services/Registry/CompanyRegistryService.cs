@@ -4,15 +4,18 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Fakturio.Api.Common;
+using Fakturio.Api.Configuration;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Services.Common;
 using Fakturio.Api.Validation;
+using Microsoft.Extensions.Options;
 
 namespace Fakturio.Api.Services.Registry;
 
 public sealed class CompanyRegistryService(
     IHttpClientFactory httpClientFactory,
+    IOptions<RegistryOptions> registryOptions,
     ILogger<CompanyRegistryService> logger) : ICompanyRegistryService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -48,7 +51,7 @@ public sealed class CompanyRegistryService(
             return normalizedCountry switch
             {
                 "CZ" => await LookupAresAsync(normalizedIco, ct),
-                "SK" => await LookupRpoAsync(normalizedIco, ct),
+                "SK" => await LookupSlovakAsync(normalizedIco, ct),
                 _ => ServiceResult<RegistryCompanyResponse>.BadRequest(
                     "Supported countries are SK and CZ.",
                     ErrorCodes.UnsupportedCountry)
@@ -66,6 +69,215 @@ public sealed class CompanyRegistryService(
                 StatusCodes.Status502BadGateway,
                 ErrorCodes.RegistryUnavailable);
         }
+    }
+
+    public async Task<ServiceResult<RegistrySearchResponse>> SearchAsync(
+        string query,
+        string? country = null,
+        int limit = 10,
+        CancellationToken ct = default)
+    {
+        var q = (query ?? string.Empty).Trim();
+        if (q.Length < 2)
+        {
+            return ServiceResult<RegistrySearchResponse>.BadRequest(
+                "Search query must be at least 2 characters.",
+                ErrorCodes.BadRequest);
+        }
+
+        var normalizedCountry = (country ?? "SK").Trim().ToUpperInvariant();
+        if (normalizedCountry is not ("SK" or "CZ"))
+        {
+            return ServiceResult<RegistrySearchResponse>.BadRequest(
+                "Supported countries are SK and CZ.",
+                ErrorCodes.UnsupportedCountry);
+        }
+
+        // Numeric query → treat as IČO lookup (single hit).
+        var asIco = SlovakValidators.NormalizeIco(q);
+        if (asIco is not null && SlovakValidators.BeValidIco(asIco))
+        {
+            var lookup = await LookupAsync(normalizedCountry, asIco, ct);
+            if (!lookup.Success || lookup.Data is null)
+            {
+                return lookup.StatusCode == StatusCodes.Status404NotFound
+                    ? ServiceResult<RegistrySearchResponse>.Ok(new RegistrySearchResponse(q, []))
+                    : ServiceResult<RegistrySearchResponse>.Fail(
+                        lookup.Error ?? "Company registry is temporarily unavailable.",
+                        lookup.StatusCode,
+                        lookup.ErrorCode ?? ErrorCodes.RegistryUnavailable);
+            }
+
+            var company = lookup.Data;
+            return ServiceResult<RegistrySearchResponse>.Ok(new RegistrySearchResponse(
+                q,
+                [
+                    new RegistrySearchHitResponse(
+                        company.Ico,
+                        company.Name,
+                        company.City,
+                        company.IcDph,
+                        company.IsVatPayer,
+                        company.LegalForm,
+                        company.Source)
+                ]));
+        }
+
+        if (normalizedCountry != "SK")
+        {
+            return ServiceResult<RegistrySearchResponse>.BadRequest(
+                "Name search is currently available for SK (ORSF). Use IČO for CZ.",
+                ErrorCodes.UnsupportedCountry);
+        }
+
+        try
+        {
+            var client = httpClientFactory.CreateClient("orsf");
+            var capped = Math.Clamp(limit, 1, 50);
+            using var response = await client.GetAsync(
+                $"search?q={Uri.EscapeDataString(q)}&limit={capped}",
+                ct);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning("ORSF search returned {StatusCode}", (int)response.StatusCode);
+                return ServiceResult<RegistrySearchResponse>.Fail(
+                    "Company search is temporarily unavailable.",
+                    StatusCodes.Status502BadGateway,
+                    ErrorCodes.RegistryUnavailable);
+            }
+
+            var payload = await response.Content.ReadFromJsonAsync<OrsfSearchResponse>(JsonOptions, ct);
+            var hits = (payload?.Hits ?? [])
+                .Where(h => !string.IsNullOrWhiteSpace(h.Ico) && !string.IsNullOrWhiteSpace(h.Name))
+                .Select(h => new RegistrySearchHitResponse(
+                    Ico: h.Ico!.Trim(),
+                    Name: h.Name!.Trim(),
+                    City: NormalizeOptional(h.City),
+                    IcDph: NormalizeOptional(h.IcDph)?.ToUpperInvariant(),
+                    IsVatPayer: h.IsVatPayer,
+                    LegalForm: NormalizeOptional(h.LegalForm),
+                    Source: "orsf"))
+                .ToList();
+
+            return ServiceResult<RegistrySearchResponse>.Ok(new RegistrySearchResponse(q, hits));
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ORSF search failed for {Query}", q);
+            return ServiceResult<RegistrySearchResponse>.Fail(
+                "Company search is temporarily unavailable.",
+                StatusCodes.Status502BadGateway,
+                ErrorCodes.RegistryUnavailable);
+        }
+    }
+
+    private async Task<ServiceResult<RegistryCompanyResponse>> LookupSlovakAsync(
+        string ico,
+        CancellationToken ct)
+    {
+        if (registryOptions.Value.PreferOrsf)
+        {
+            var orsf = await LookupOrsfAsync(ico, ct);
+            if (orsf.Success)
+                return orsf;
+
+            if (orsf.StatusCode is not (StatusCodes.Status404NotFound or StatusCodes.Status502BadGateway))
+                return orsf;
+
+            logger.LogDebug(
+                "ORSF miss/unavailable for {Ico} (status {Status}); falling back to RPO",
+                ico,
+                orsf.StatusCode);
+        }
+
+        return await LookupRpoAsync(ico, ct);
+    }
+
+    private async Task<ServiceResult<RegistryCompanyResponse>> LookupOrsfAsync(
+        string ico,
+        CancellationToken ct)
+    {
+        var client = httpClientFactory.CreateClient("orsf");
+        using var response = await client.GetAsync($"companies/{Uri.EscapeDataString(ico)}", ct);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return ServiceResult<RegistryCompanyResponse>.NotFound(
+                $"No Slovak company found for IČO {ico}.",
+                ErrorCodes.RegistryNotFound);
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "ORSF returned {StatusCode} for IČO {Ico}",
+                (int)response.StatusCode,
+                ico);
+            return ServiceResult<RegistryCompanyResponse>.Fail(
+                "ORSF registry is temporarily unavailable.",
+                StatusCodes.Status502BadGateway,
+                ErrorCodes.RegistryUnavailable);
+        }
+
+        var payload = await response.Content.ReadFromJsonAsync<OrsfCompany>(JsonOptions, ct);
+        if (payload is null || string.IsNullOrWhiteSpace(payload.Name))
+        {
+            return ServiceResult<RegistryCompanyResponse>.NotFound(
+                $"No Slovak company found for IČO {ico}.",
+                ErrorCodes.RegistryNotFound);
+        }
+
+        var dic = NormalizeOptional(payload.Dic);
+        var icDph = NormalizeOptional(payload.IcDph)?.ToUpperInvariant();
+        if (icDph is not null && !SlovakValidators.BeValidIcDph(icDph))
+            icDph = null;
+        if (dic is not null && !SlovakValidators.BeValidDic(dic))
+            dic = null;
+
+        bool? isVatPayer = icDph is not null
+            ? true
+            : payload.Status is not null
+                ? null
+                : dic is not null ? false : null;
+
+        var commercial = FormatOrsfRegistration(
+            payload.RegisterOffice,
+            payload.RegisterNumber,
+            payload.Register);
+
+        return ServiceResult<RegistryCompanyResponse>.Ok(new RegistryCompanyResponse(
+            Country: "SK",
+            Source: "orsf",
+            Ico: payload.Ico ?? ico,
+            Name: payload.Name.Trim(),
+            LegalForm: NormalizeOptional(payload.LegalForm),
+            Dic: dic,
+            IcDph: icDph,
+            Street: NormalizeOptional(payload.Street),
+            City: NormalizeOptional(payload.City),
+            PostalCode: FormatPostalCode(payload.Psc),
+            CountryCode: "SK",
+            IsVatPayer: isVatPayer ?? (icDph is not null),
+            CommercialRegister: commercial));
+    }
+
+    private static string? FormatOrsfRegistration(string? office, string? number, string? register)
+    {
+        var officeN = NormalizeOptional(office);
+        var numberN = NormalizeOptional(number);
+        var registerN = NormalizeOptional(register);
+        if (officeN is null && numberN is null)
+            return registerN;
+        if (officeN is null)
+            return numberN;
+        if (numberN is null)
+            return officeN;
+        return $"{officeN}, {numberN}";
     }
 
     private async Task<ServiceResult<RegistryCompanyResponse>> LookupAresAsync(
@@ -485,5 +697,37 @@ public sealed class CompanyRegistryService(
     {
         public string? Office { get; set; }
         public string? Number { get; set; }
+    }
+
+    private sealed class OrsfSearchResponse
+    {
+        public List<OrsfSearchHit>? Hits { get; set; }
+    }
+
+    private sealed class OrsfSearchHit
+    {
+        public string? Ico { get; set; }
+        public string? Name { get; set; }
+        public string? City { get; set; }
+        public string? IcDph { get; set; }
+        public bool? IsVatPayer { get; set; }
+        public string? LegalForm { get; set; }
+    }
+
+    private sealed class OrsfCompany
+    {
+        public string? Ico { get; set; }
+        public string? Name { get; set; }
+        public string? Dic { get; set; }
+        [JsonPropertyName("icdph")]
+        public string? IcDph { get; set; }
+        public string? Street { get; set; }
+        public string? City { get; set; }
+        public string? Psc { get; set; }
+        public string? LegalForm { get; set; }
+        public string? Status { get; set; }
+        public string? Register { get; set; }
+        public string? RegisterOffice { get; set; }
+        public string? RegisterNumber { get; set; }
     }
 }

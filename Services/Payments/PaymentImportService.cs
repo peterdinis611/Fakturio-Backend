@@ -12,7 +12,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Fakturio.Api.Services.Payments;
 
 public sealed class PaymentImportService(
-    AppDbContext db, ITenantContext tenant,
+    AppDbContext db,
+    ITenantContext tenant,
     IInvoiceService invoices) : IPaymentImportService
 {
     private static readonly string[] VsHeaders =
@@ -22,7 +23,7 @@ public sealed class PaymentImportService(
 
     private static readonly string[] AmountHeaders =
     [
-        "suma", "amount", "castka", "čiastka", "ciastka", "credit", "kredit", "prijem"
+        "suma", "amount", "castka", "čiastka", "ciastka", "credit", "kredit", "prijem", "objem"
     ];
 
     private static readonly string[] DateHeaders =

@@ -7,7 +7,7 @@ namespace Fakturio.Api.Services.Reminders;
 
 /// <summary>
 /// Creates in-app notifications (SignalR) for reminder candidates, respecting user preferences.
-/// Email channel is preference-gated and logged until SMTP is wired.
+/// Email channel is preference-gated and logged until a key-free mail path is wired.
 /// </summary>
 public sealed class SignalHubReminderNotifier(
     AppDbContext db,
@@ -87,9 +87,8 @@ public sealed class SignalHubReminderNotifier(
 
         if (prefs?.EmailEnabled == true)
         {
-            // SMTP not wired yet — keep an audit trail so prefs are meaningful.
             logger.LogInformation(
-                "Email reminder preferred for {Number} → {Email} (SMTP not configured; skipped send).",
+                "Email reminder preferred for {Number} → {Email} (no mail provider configured; skipped send).",
                 reminder.Number,
                 reminder.CustomerEmail ?? company.Email ?? "—");
         }
