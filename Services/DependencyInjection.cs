@@ -12,8 +12,10 @@ using Fakturio.Api.Services.Exports;
 using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Jobs;
 using Fakturio.Api.Services.Notes;
+using Fakturio.Api.Services.Address;
 using Fakturio.Api.Services.Payments;
 using Fakturio.Api.Services.Fx;
+using Fakturio.Api.Services.Iban;
 using Fakturio.Api.Services.Registry;
 using Fakturio.Api.Services.Reminders;
 using Fakturio.Api.Services.Notifications;
@@ -84,10 +86,41 @@ public static class DependencyInjection
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
+        services.AddHttpClient("cnb", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(fx.CnbBaseUrl));
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
+        });
+        services.AddHttpClient("openiban", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.OpenIbanBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
+        services.AddHttpClient("nominatim", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.NominatimBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0 (invoice-app; contact@fakturio.local)");
+        });
+        services.AddHttpClient("orsr", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.OrsrBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
 
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
         services.AddScoped<IVatVerificationService, VatVerificationService>();
-        services.AddSingleton<IFxRateService, FrankfurterFxRateService>();
+        services.AddScoped<IFsVatPayerService, FsVatPayerService>();
+        services.AddScoped<IOrsrService, OrsrService>();
+        services.AddScoped<IIbanLookupService, IbanLookupService>();
+        services.AddSingleton<IAddressNormalizeService, NominatimAddressService>();
+        services.AddSingleton<FrankfurterFxRateService>();
+        services.AddSingleton<CnbFxRateService>();
+        services.AddSingleton<IFxRateService, CompositeFxRateService>();
 
         services.AddHostedService<OverdueSyncBackgroundService>();
         services.AddScoped<INotificationService, NotificationService>();

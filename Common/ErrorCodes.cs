@@ -38,6 +38,10 @@ public static class ErrorCodes
     public const string InvalidVatId = "invalid_vat_id";
     public const string ViesUnavailable = "vies_unavailable";
     public const string FxUnavailable = "fx_unavailable";
+    public const string InvalidIban = "invalid_iban";
+    public const string FsUnavailable = "fs_unavailable";
+    public const string AddressUnavailable = "address_unavailable";
+    public const string OrsrUnavailable = "orsr_unavailable";
 
     public const string FileTooLarge = "file_too_large";
     public const string InvalidFileType = "invalid_file_type";

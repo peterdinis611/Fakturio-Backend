@@ -4,5 +4,6 @@ public record FxRatesResponse(
     string Base,
     DateOnly Date,
     IReadOnlyDictionary<string, decimal> Rates,
-    string Source
+    string Source,
+    DateOnly? RequestedDate = null
 );

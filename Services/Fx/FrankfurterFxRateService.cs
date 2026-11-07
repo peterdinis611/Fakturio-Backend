@@ -5,16 +5,16 @@ using System.Text.Json;
 using Fakturio.Api.Common;
 using Fakturio.Api.Configuration;
 using Fakturio.Api.Dtos;
-using Fakturio.Api.Interfaces;
 using Fakturio.Api.Services.Common;
 using Microsoft.Extensions.Options;
 
 namespace Fakturio.Api.Services.Fx;
 
+/// <summary>ECB rates via Frankfurter (latest + historical).</summary>
 public sealed class FrankfurterFxRateService(
     IHttpClientFactory httpClientFactory,
     IOptions<FxOptions> options,
-    ILogger<FrankfurterFxRateService> logger) : IFxRateService
+    ILogger<FrankfurterFxRateService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -23,20 +23,28 @@ public sealed class FrankfurterFxRateService(
 
     private readonly ConcurrentDictionary<string, (DateTimeOffset Expires, FxRatesResponse Value)> _cache = new();
 
-    public async Task<ServiceResult<FxRatesResponse>> GetLatestAsync(
-        string @base = "EUR",
-        IReadOnlyList<string>? symbols = null,
-        CancellationToken ct = default)
-    {
-        var baseCode = NormalizeCode(@base) ?? "EUR";
-        var symbolList = (symbols ?? ["CZK", "USD"])
-            .Select(NormalizeCode)
-            .Where(c => c is not null && c != baseCode)
-            .Cast<string>()
-            .Distinct(StringComparer.Ordinal)
-            .OrderBy(c => c, StringComparer.Ordinal)
-            .ToArray();
+    public Task<ServiceResult<FxRatesResponse>> GetLatestAsync(
+        string @base,
+        IReadOnlyList<string> symbols,
+        CancellationToken ct) =>
+        FetchAsync("latest", @base, symbols, requestedDate: null, ct);
 
+    public Task<ServiceResult<FxRatesResponse>> GetOnDateAsync(
+        DateOnly date,
+        string @base,
+        IReadOnlyList<string> symbols,
+        CancellationToken ct) =>
+        FetchAsync(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), @base, symbols, date, ct);
+
+    private async Task<ServiceResult<FxRatesResponse>> FetchAsync(
+        string pathOrDate,
+        string @base,
+        IReadOnlyList<string> symbols,
+        DateOnly? requestedDate,
+        CancellationToken ct)
+    {
+        var baseCode = FxHelpers.NormalizeCode(@base) ?? "EUR";
+        var symbolList = FxHelpers.NormalizeSymbols(symbols, baseCode);
         if (symbolList.Length == 0)
         {
             return ServiceResult<FxRatesResponse>.BadRequest(
@@ -44,22 +52,20 @@ public sealed class FrankfurterFxRateService(
                 ErrorCodes.BadRequest);
         }
 
-        var cacheKey = $"{baseCode}:{string.Join(',', symbolList)}";
+        var cacheKey = $"ff:{pathOrDate}:{baseCode}:{string.Join(',', symbolList)}";
         if (_cache.TryGetValue(cacheKey, out var cached) && cached.Expires > DateTimeOffset.UtcNow)
             return ServiceResult<FxRatesResponse>.Ok(cached.Value);
 
         try
         {
             var client = httpClientFactory.CreateClient("frankfurter");
-            var qs = $"latest?base={Uri.EscapeDataString(baseCode)}&symbols={Uri.EscapeDataString(string.Join(',', symbolList))}";
+            var qs =
+                $"{pathOrDate}?base={Uri.EscapeDataString(baseCode)}&symbols={Uri.EscapeDataString(string.Join(',', symbolList))}";
             using var response = await client.GetAsync(qs, ct);
 
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning(
-                    "Frankfurter returned {StatusCode} for {Query}",
-                    (int)response.StatusCode,
-                    qs);
+                logger.LogWarning("Frankfurter returned {StatusCode} for {Query}", (int)response.StatusCode, qs);
                 return ServiceResult<FxRatesResponse>.Fail(
                     "Exchange rates are temporarily unavailable.",
                     StatusCodes.Status502BadGateway,
@@ -84,11 +90,9 @@ public sealed class FrankfurterFxRateService(
                 Date: date,
                 Rates: payload.Rates
                     .Where(kv => !string.IsNullOrWhiteSpace(kv.Key))
-                    .ToDictionary(
-                        kv => kv.Key.ToUpperInvariant(),
-                        kv => kv.Value,
-                        StringComparer.Ordinal),
-                Source: "frankfurter");
+                    .ToDictionary(kv => kv.Key.ToUpperInvariant(), kv => kv.Value, StringComparer.Ordinal),
+                Source: "frankfurter",
+                RequestedDate: requestedDate);
 
             var ttl = TimeSpan.FromSeconds(Math.Clamp(options.Value.CacheSeconds, 60, 86_400));
             _cache[cacheKey] = (DateTimeOffset.UtcNow.Add(ttl), result);
@@ -106,14 +110,6 @@ public sealed class FrankfurterFxRateService(
                 StatusCodes.Status502BadGateway,
                 ErrorCodes.FxUnavailable);
         }
-    }
-
-    private static string? NormalizeCode(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-            return null;
-        var trimmed = code.Trim().ToUpperInvariant();
-        return trimmed.Length == 3 ? trimmed : null;
     }
 
     private sealed class FrankfurterPayload

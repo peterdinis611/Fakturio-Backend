@@ -23,6 +23,15 @@ public sealed class RegistryOptions
     public string ViesBaseUrl { get; set; } =
         "https://ec.europa.eu/taxation_customs/vies/rest-api/";
 
+    /// <summary>Official ORSR Open Data API.</summary>
+    public string OrsrBaseUrl { get; set; } = "https://sluzby.orsr.sk/api/";
+
+    /// <summary>openiban.com — IBAN → bank / BIC (no key).</summary>
+    public string OpenIbanBaseUrl { get; set; } = "https://openiban.com/";
+
+    /// <summary>OSM Nominatim — address normalize (rate-limited).</summary>
+    public string NominatimBaseUrl { get; set; } = "https://nominatim.openstreetmap.org/";
+
     /// <summary>Prefer ORSF over RPO for SK IČO lookup (falls back to RPO).</summary>
     public bool PreferOrsf { get; set; } = true;
 
