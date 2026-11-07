@@ -38,6 +38,7 @@ public static class DependencyInjection
     {
         services.Configure<OverdueSyncOptions>(configuration.GetSection(OverdueSyncOptions.SectionName));
         services.Configure<ReminderJobOptions>(configuration.GetSection(ReminderJobOptions.SectionName));
+        services.Configure<RecurringJobOptions>(configuration.GetSection(RecurringJobOptions.SectionName));
         services.Configure<RegistryOptions>(configuration.GetSection(RegistryOptions.SectionName));
         services.Configure<FxOptions>(configuration.GetSection(FxOptions.SectionName));
         services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));

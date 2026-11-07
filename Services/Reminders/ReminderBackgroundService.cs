@@ -1,5 +1,6 @@
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Jobs;
+using Fakturio.Api.Services.Jobs;
 
 namespace Fakturio.Api.Services.Reminders;
 
@@ -89,6 +90,9 @@ public sealed class ReminderBackgroundService(
 
             if (due.Count == 0)
             {
+                jobSettings.RecordRun(
+                    JobSettingsStore.ReminderKey,
+                    $"scanned={candidates.Count}, sent=0");
                 logger.LogDebug(
                     "Reminder job: no candidates (scanned {Scanned}, withinDays={WithinDays}, onlyOverdue={OnlyOverdue}).",
                     candidates.Count,
@@ -140,6 +144,9 @@ public sealed class ReminderBackgroundService(
                 }
             }
 
+            jobSettings.RecordRun(
+                JobSettingsStore.ReminderKey,
+                $"scanned={candidates.Count}, sent={sent}, failed={failed}");
             logger.LogInformation(
                 "Reminder job finished: sent={Sent}, failed={Failed}.",
                 sent,
@@ -151,6 +158,7 @@ public sealed class ReminderBackgroundService(
         }
         catch (Exception ex)
         {
+            jobSettings.RecordRun(JobSettingsStore.ReminderKey, $"error: {ex.Message}");
             logger.LogError(ex, "Reminder job failed.");
         }
     }

@@ -109,6 +109,13 @@ namespace Fakturio.Api.Data.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("InvoicePdfTemplate")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("classic");
+
                     b.Property<string>("CreditNotePrefix")
                         .HasMaxLength(20)
                         .HasColumnType("TEXT");

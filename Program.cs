@@ -87,12 +87,15 @@ try
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         await DatabaseInitializer.InitializeAsync(db);
 
-        var hasher = scope.ServiceProvider
-            .GetRequiredService<Microsoft.AspNetCore.Identity.IPasswordHasher<Fakturio.Api.Models.AppUser>>();
-        var seedLogger = scope.ServiceProvider
-            .GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
-            .CreateLogger("DemoDataSeeder");
-        await DemoDataSeeder.SeedAsync(db, hasher, seedLogger);
+        if (app.Environment.IsDevelopment())
+        {
+            var hasher = scope.ServiceProvider
+                .GetRequiredService<Microsoft.AspNetCore.Identity.IPasswordHasher<Fakturio.Api.Models.AppUser>>();
+            var seedLogger = scope.ServiceProvider
+                .GetRequiredService<Microsoft.Extensions.Logging.ILoggerFactory>()
+                .CreateLogger("DemoDataSeeder");
+            await DemoDataSeeder.SeedAsync(db, hasher, seedLogger);
+        }
     }
 
     if (app.Environment.IsDevelopment())

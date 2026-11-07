@@ -22,12 +22,29 @@ public record ReminderJobSettingsDto(
     bool MarkAsSent
 );
 
+public record RecurringJobSettingsDto(
+    bool Enabled,
+    int IntervalHours,
+    int StartupDelaySeconds,
+    int DisabledRecheckHours
+);
+
+public record JobRunStatusDto(
+    DateTimeOffset? LastRunAtUtc,
+    string? LastMessage
+);
+
 public record JobSettingsResponse(
     OverdueJobSettingsDto OverdueSync,
-    ReminderJobSettingsDto ReminderJob
+    ReminderJobSettingsDto ReminderJob,
+    RecurringJobSettingsDto RecurringInvoices,
+    JobRunStatusDto OverdueSyncRun,
+    JobRunStatusDto ReminderJobRun,
+    JobRunStatusDto RecurringInvoicesRun
 );
 
 public record UpdateJobSettingsRequest(
     OverdueJobSettingsDto OverdueSync,
-    ReminderJobSettingsDto ReminderJob
+    ReminderJobSettingsDto ReminderJob,
+    RecurringJobSettingsDto RecurringInvoices
 );

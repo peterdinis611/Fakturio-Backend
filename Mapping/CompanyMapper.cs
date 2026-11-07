@@ -34,6 +34,7 @@ public static class CompanyMapper
         c.DefaultConstantSymbol,
         c.DefaultInvoiceNotes,
         c.InvoiceFooter,
+        InvoicePdfTemplates.Normalize(c.InvoicePdfTemplate),
         c.LogoUrl,
         c.Notes,
         c.CreatedAt,
@@ -130,6 +131,8 @@ public static class CompanyMapper
         company.DefaultConstantSymbol = Normalize(request.DefaultConstantSymbol);
         company.DefaultInvoiceNotes = Normalize(request.DefaultInvoiceNotes);
         company.InvoiceFooter = Normalize(request.InvoiceFooter);
+        if (request.InvoicePdfTemplate is not null)
+            company.InvoicePdfTemplate = InvoicePdfTemplates.Normalize(request.InvoicePdfTemplate);
         company.LogoUrl = Normalize(request.LogoUrl);
         company.Notes = Normalize(request.Notes);
         company.UpdatedAt = DateTime.UtcNow;
@@ -153,6 +156,8 @@ public static class CompanyMapper
             company.DefaultInvoiceNotes = Normalize(request.DefaultInvoiceNotes);
         if (request.InvoiceFooter is not null)
             company.InvoiceFooter = Normalize(request.InvoiceFooter);
+        if (request.InvoicePdfTemplate is not null)
+            company.InvoicePdfTemplate = InvoicePdfTemplates.Normalize(request.InvoicePdfTemplate);
 
         company.UpdatedAt = DateTime.UtcNow;
     }

@@ -7,6 +7,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Fakturio.Api.Tests/**" />
+    <Content Remove="Fakturio.Api.Tests/**" />
+    <EmbeddedResource Remove="Fakturio.Api.Tests/**" />
+    <None Remove="Fakturio.Api.Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="12.2.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.3" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />

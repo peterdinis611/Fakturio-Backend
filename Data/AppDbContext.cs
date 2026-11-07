@@ -77,6 +77,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(c => c.DefaultConstantSymbol).HasMaxLength(10);
             entity.Property(c => c.DefaultInvoiceNotes).HasMaxLength(2000);
             entity.Property(c => c.InvoiceFooter).HasMaxLength(2000);
+            entity.Property(c => c.InvoicePdfTemplate)
+                .HasMaxLength(20)
+                .HasDefaultValue(InvoicePdfTemplates.Classic);
             entity.Property(c => c.LogoUrl).HasMaxLength(500);
             entity.Property(c => c.Notes).HasMaxLength(2000);
         });

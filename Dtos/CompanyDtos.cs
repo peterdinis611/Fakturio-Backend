@@ -28,6 +28,7 @@ public record UpdateCompanySettingsRequest(
     string? DefaultConstantSymbol,
     string? DefaultInvoiceNotes,
     string? InvoiceFooter,
+    string? InvoicePdfTemplate,
     string? LogoUrl,
     string? Notes
 );
@@ -40,7 +41,8 @@ public record UpdateCompanyDefaultsRequest(
     string? DefaultPaymentMethod,
     string? DefaultConstantSymbol,
     string? DefaultInvoiceNotes,
-    string? InvoiceFooter
+    string? InvoiceFooter,
+    string? InvoicePdfTemplate
 );
 
 public record UpdateCompanyBankRequest(
@@ -106,6 +108,7 @@ public record CompanySettingsResponse(
     string? DefaultConstantSymbol,
     string? DefaultInvoiceNotes,
     string? InvoiceFooter,
+    string InvoicePdfTemplate,
     string? LogoUrl,
     string? Notes,
     DateTime CreatedAt,

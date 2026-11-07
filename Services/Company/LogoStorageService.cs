@@ -78,6 +78,32 @@ public sealed class LogoStorageService(
         return Task.CompletedTask;
     }
 
+    public async Task<byte[]?> TryReadImageBytesAsync(string? logoUrl, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(logoUrl))
+            return null;
+
+        if (!TryResolveLocalPath(logoUrl, out var absolutePath))
+            return null;
+
+        var ext = Path.GetExtension(absolutePath).ToLowerInvariant();
+        if (ext is ".svg" or "")
+            return null;
+
+        if (!File.Exists(absolutePath))
+            return null;
+
+        try
+        {
+            return await File.ReadAllBytesAsync(absolutePath, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to read logo for PDF at {Path}", absolutePath);
+            return null;
+        }
+    }
+
     private string GetLogosDirectory()
     {
         var root = options.Value.RootPath;

@@ -1,4 +1,5 @@
 using Fakturio.Api.Dtos;
+using Fakturio.Api.Models;
 using FluentValidation;
 
 namespace Fakturio.Api.Validation;
@@ -108,6 +109,9 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
         RuleFor(x => x.DefaultInvoiceNotes).MaximumLength(2000);
         RuleFor(x => x.InvoiceFooter).MaximumLength(2000);
         RuleFor(x => x.Notes).MaximumLength(2000);
+        RuleFor(x => x.InvoicePdfTemplate)
+            .Must(t => t is null || InvoicePdfTemplates.All.Contains(t.Trim().ToLowerInvariant()))
+            .WithMessage("Invoice PDF template must be classic, modern, or compact.");
 
         RuleFor(x => x.LogoUrl)
             .MaximumLength(500)
@@ -156,6 +160,9 @@ public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCom
 
         RuleFor(x => x.DefaultInvoiceNotes).MaximumLength(2000);
         RuleFor(x => x.InvoiceFooter).MaximumLength(2000);
+        RuleFor(x => x.InvoicePdfTemplate)
+            .Must(t => t is null || InvoicePdfTemplates.All.Contains(t.Trim().ToLowerInvariant()))
+            .WithMessage("Invoice PDF template must be classic, modern, or compact.");
 
         RuleFor(x => x)
             .Must(HasAtLeastOneField)
@@ -170,7 +177,8 @@ public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCom
         || x.DefaultPaymentMethod is not null
         || x.DefaultConstantSymbol is not null
         || x.DefaultInvoiceNotes is not null
-        || x.InvoiceFooter is not null;
+        || x.InvoiceFooter is not null
+        || x.InvoicePdfTemplate is not null;
 }
 
 public class UpdateCompanyBankRequestValidator : AbstractValidator<UpdateCompanyBankRequest>

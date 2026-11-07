@@ -49,6 +49,9 @@ public class CompanySettings
     public string? DefaultInvoiceNotes { get; set; }
     public string? InvoiceFooter { get; set; }
 
+    /// <summary>PDF layout: classic | modern | compact.</summary>
+    public string InvoicePdfTemplate { get; set; } = InvoicePdfTemplates.Classic;
+
     // Branding / misc
     public string? LogoUrl { get; set; }
     public string? Notes { get; set; }

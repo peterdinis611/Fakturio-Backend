@@ -1,5 +1,6 @@
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Jobs;
+using Fakturio.Api.Services.Jobs;
 
 namespace Fakturio.Api.Services.Invoices;
 
@@ -69,6 +70,9 @@ public sealed class OverdueSyncBackgroundService(
             await using var scope = scopeFactory.CreateAsyncScope();
             var invoices = scope.ServiceProvider.GetRequiredService<IInvoiceService>();
             var result = await invoices.SyncOverdueAsync(ct);
+            jobSettings.RecordRun(
+                JobSettingsStore.OverdueKey,
+                $"updated={result.UpdatedCount}");
 
             if (result.UpdatedCount > 0)
                 logger.LogInformation("Overdue sync updated {Count} invoice(s).", result.UpdatedCount);
@@ -81,6 +85,7 @@ public sealed class OverdueSyncBackgroundService(
         }
         catch (Exception ex)
         {
+            jobSettings.RecordRun(JobSettingsStore.OverdueKey, $"error: {ex.Message}");
             logger.LogError(ex, "Overdue sync failed.");
         }
     }
