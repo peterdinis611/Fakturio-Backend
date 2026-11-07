@@ -702,7 +702,7 @@ public class InvoiceService(
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var companyId = await tenant.GetCompanyIdAsync(ct);
         var query = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
-            .Where(i => InvoiceMapper.CountsTowardRevenue(i.DocumentType))
+            .Where(i => InvoiceMapper.RevenueDocumentTypes.Contains(i.DocumentType))
             .AsQueryable();
 
         if (from.HasValue)

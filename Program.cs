@@ -3,6 +3,7 @@ using Fakturio.Api.Data;
 using Fakturio.Api.Extensions;
 using Fakturio.Api.Hubs;
 using Fakturio.Api.Infrastructure;
+using Fakturio.Api.Middleware;
 using Fakturio.Api.Services;
 using Fakturio.Api.Validation;
 using FluentValidation;
@@ -15,7 +16,7 @@ using Serilog;
 Log.Logger = new LoggerConfiguration()
     .MinimumLevel.Information()
     .Enrich.WithProperty("Application", "Fakturio.Api")
-    .WriteTo.Console(outputTemplate: "[{Timestamp:HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
+    .WriteTo.Console(outputTemplate: SerilogExtensions.DevelopmentOutputTemplate)
     .CreateBootstrapLogger();
 
 try
@@ -113,6 +114,7 @@ try
     app.UseCors();
     app.UseHttpsRedirection();
     app.UseAuthentication();
+    app.UseMiddleware<UserIdLogContextMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
     app.MapHub<SignalHub>("/hubs/signal");

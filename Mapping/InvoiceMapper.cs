@@ -216,7 +216,18 @@ public static class InvoiceMapper
         _ => "Faktúra"
     };
 
+    /// <summary>
+    /// Tax / revenue documents only (excludes proforma, quotes, delivery, orders).
+    /// Prefer this array with <c>Contains</c> inside EF <c>IQueryable</c> filters —
+    /// instance method calls are not translated to SQL.
+    /// </summary>
+    public static readonly InvoiceDocumentType[] RevenueDocumentTypes =
+    [
+        InvoiceDocumentType.Invoice,
+        InvoiceDocumentType.CreditNote,
+    ];
+
     /// <summary>Tax / revenue documents only (excludes proforma, quotes, delivery, orders).</summary>
     public static bool CountsTowardRevenue(InvoiceDocumentType type) =>
-        type is InvoiceDocumentType.Invoice or InvoiceDocumentType.CreditNote;
+        RevenueDocumentTypes.Contains(type);
 }

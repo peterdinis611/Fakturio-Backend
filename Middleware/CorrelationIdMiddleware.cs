@@ -18,7 +18,12 @@ public sealed class CorrelationIdMiddleware(RequestDelegate next)
             return Task.CompletedTask;
         });
 
+        var method = context.Request.Method;
+        var path = context.Request.Path.Value ?? "/";
+
         using (LogContext.PushProperty("CorrelationId", correlationId))
+        using (LogContext.PushProperty("RequestMethod", method))
+        using (LogContext.PushProperty("RequestPath", path))
             await next(context);
     }
 
