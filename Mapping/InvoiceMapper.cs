@@ -9,6 +9,7 @@ public static class InvoiceMapper
         i.Id,
         i.Number,
         i.DocumentType,
+        i.Flow,
         i.Status,
         i.CustomerId,
         i.CustomerName,
@@ -31,6 +32,7 @@ public static class InvoiceMapper
             i.Id,
             i.Number,
             i.DocumentType,
+            i.Flow,
             i.Status,
             i.CustomerId,
             new InvoicePartyResponse(
@@ -148,7 +150,8 @@ public static class InvoiceMapper
         i.DocumentType == InvoiceDocumentType.CreditNote ? -Math.Abs(i.Total) : i.Total;
 
     public static bool CountsInRevenue(Invoice i) =>
-        i.DocumentType != InvoiceDocumentType.Proforma
+        i.Flow == DocumentFlow.Issued
+        && CountsTowardRevenue(i.DocumentType)
         && i.Status is not InvoiceStatus.Cancelled and not InvoiceStatus.Draft;
 
     public static void ApplyCustomerSnapshot(Invoice invoice, Customer customer)
@@ -207,6 +210,13 @@ public static class InvoiceMapper
     {
         InvoiceDocumentType.Proforma => "Zálohová faktúra",
         InvoiceDocumentType.CreditNote => "Dobropis",
+        InvoiceDocumentType.Quote => "Cenová ponuka",
+        InvoiceDocumentType.DeliveryNote => "Dodací list",
+        InvoiceDocumentType.SalesOrder => "Objednávka",
         _ => "Faktúra"
     };
+
+    /// <summary>Tax / revenue documents only (excludes proforma, quotes, delivery, orders).</summary>
+    public static bool CountsTowardRevenue(InvoiceDocumentType type) =>
+        type is InvoiceDocumentType.Invoice or InvoiceDocumentType.CreditNote;
 }

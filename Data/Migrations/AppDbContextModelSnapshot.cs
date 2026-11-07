@@ -327,6 +327,11 @@ namespace Fakturio.Api.Data.Migrations
                         .HasColumnType("INTEGER")
                         .HasDefaultValue(0);
 
+                    b.Property<int>("Flow")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
                     b.Property<DateOnly>("DueDate")
                         .HasColumnType("TEXT");
 
@@ -438,6 +443,8 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.HasIndex("DueDate");
 
+                    b.HasIndex("Flow");
+
                     b.HasIndex("IssueDate");
 
                     b.HasIndex("RelatedInvoiceId");
@@ -445,6 +452,8 @@ namespace Fakturio.Api.Data.Migrations
                     b.HasIndex("Status");
 
                     b.HasIndex("VariableSymbol");
+
+                    b.HasIndex("CompanyId", "Flow", "DocumentType");
 
                     b.ToTable("Invoices");
                 });

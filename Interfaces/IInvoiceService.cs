@@ -78,5 +78,6 @@ public record InvoiceListQuery(
     string? Search = null,
     DateOnly? IssueFrom = null,
     DateOnly? IssueTo = null,
-    bool? OverdueOnly = null
+    bool? OverdueOnly = null,
+    DocumentFlow? Flow = null
 );

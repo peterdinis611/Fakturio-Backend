@@ -10,5 +10,6 @@ public interface IInvoiceNumberService
         string? invoicePrefix = null,
         string? proformaPrefix = null,
         string? creditNotePrefix = null,
-        CancellationToken ct = default);
+        CancellationToken ct = default,
+        DocumentFlow flow = DocumentFlow.Issued);
 }

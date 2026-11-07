@@ -8,6 +8,9 @@ public class Invoice : ICompanyOwned
     public InvoiceStatus Status { get; set; } = InvoiceStatus.Draft;
     public InvoiceDocumentType DocumentType { get; set; } = InvoiceDocumentType.Invoice;
 
+    /// <summary>Issued (Faktúry) vs Received (Náklady).</summary>
+    public DocumentFlow Flow { get; set; } = DocumentFlow.Issued;
+
     /// <summary>
     /// Original invoice for a credit note, or source proforma for a finalized tax invoice.
     /// </summary>

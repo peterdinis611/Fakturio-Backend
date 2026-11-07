@@ -204,7 +204,19 @@ public sealed class NotificationService(
 
         prefs = new NotificationPreferences { UserId = userId };
         db.NotificationPreferences.Add(prefs);
-        await db.SaveChangesAsync(ct);
+        try
+        {
+            await db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException)
+        {
+            db.Entry(prefs).State = EntityState.Detached;
+            prefs = await db.NotificationPreferences
+                .FirstOrDefaultAsync(p => p.UserId == userId, ct)
+                ?? throw new InvalidOperationException(
+                    $"Notification preferences missing after unique conflict for user {userId}.");
+        }
+
         return prefs;
     }
 

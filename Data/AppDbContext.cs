@@ -90,6 +90,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(i => new { i.CompanyId, i.Number }).IsUnique();
             entity.Property(i => i.DocumentType).HasDefaultValue(InvoiceDocumentType.Invoice);
             entity.HasIndex(i => i.DocumentType);
+            entity.Property(i => i.Flow).HasDefaultValue(DocumentFlow.Issued);
+            entity.HasIndex(i => i.Flow);
+            entity.HasIndex(i => new { i.CompanyId, i.Flow, i.DocumentType });
             entity.Property(i => i.RelatedInvoiceNumber).HasMaxLength(50);
             entity.HasIndex(i => i.RelatedInvoiceId);
             entity.HasOne(i => i.RelatedInvoice)

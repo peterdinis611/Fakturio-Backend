@@ -13,16 +13,23 @@ public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
         string? invoicePrefix = null,
         string? proformaPrefix = null,
         string? creditNotePrefix = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        DocumentFlow flow = DocumentFlow.Issued)
     {
         var year = DateTime.UtcNow.Year;
-        var cleanPrefix = ResolvePrefix(documentType, invoicePrefix, proformaPrefix, creditNotePrefix);
+        var cleanPrefix = ResolvePrefix(
+            documentType,
+            flow,
+            invoicePrefix,
+            proformaPrefix,
+            creditNotePrefix);
         var yearPart = $"{year}";
         var startsWith = $"{cleanPrefix}{yearPart}";
 
         var lastNumber = await db.Invoices
             .Where(i => i.CompanyId == companyId
                 && i.DocumentType == documentType
+                && i.Flow == flow
                 && i.Number.StartsWith(startsWith))
             .OrderByDescending(i => i.Number)
             .Select(i => i.Number)
@@ -43,15 +50,34 @@ public class InvoiceNumberService(AppDbContext db) : IInvoiceNumberService
 
     private static string ResolvePrefix(
         InvoiceDocumentType documentType,
+        DocumentFlow flow,
         string? invoicePrefix,
         string? proformaPrefix,
-        string? creditNotePrefix) =>
-        documentType switch
+        string? creditNotePrefix)
+    {
+        if (flow == DocumentFlow.Received)
+        {
+            return documentType switch
+            {
+                InvoiceDocumentType.Proforma => "NZ",
+                InvoiceDocumentType.CreditNote => "ND",
+                InvoiceDocumentType.Quote => "NP",
+                InvoiceDocumentType.DeliveryNote => "NDL",
+                InvoiceDocumentType.SalesOrder => "NOB",
+                _ => "NF",
+            };
+        }
+
+        return documentType switch
         {
             InvoiceDocumentType.Proforma =>
                 string.IsNullOrWhiteSpace(proformaPrefix) ? "ZF" : proformaPrefix.Trim(),
             InvoiceDocumentType.CreditNote =>
                 string.IsNullOrWhiteSpace(creditNotePrefix) ? "DOB" : creditNotePrefix.Trim(),
-            _ => string.IsNullOrWhiteSpace(invoicePrefix) ? string.Empty : invoicePrefix.Trim()
+            InvoiceDocumentType.Quote => "CP",
+            InvoiceDocumentType.DeliveryNote => "DL",
+            InvoiceDocumentType.SalesOrder => "OB",
+            _ => string.IsNullOrWhiteSpace(invoicePrefix) ? string.Empty : invoicePrefix.Trim(),
         };
+    }
 }

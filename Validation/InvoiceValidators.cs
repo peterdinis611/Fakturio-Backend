@@ -91,8 +91,14 @@ public class CreateInvoiceRequestValidator : AbstractValidator<CreateInvoiceRequ
             .WithMessage("New invoices can only be Draft or Issued.");
 
         RuleFor(x => x.DocumentType)
-            .Must(t => t is null or InvoiceDocumentType.Invoice or InvoiceDocumentType.Proforma)
-            .WithMessage("New documents can only be Invoice or Proforma. Use credit-note endpoint for dobropis.");
+            .Must(t => t is null
+                or InvoiceDocumentType.Invoice
+                or InvoiceDocumentType.Proforma
+                or InvoiceDocumentType.Quote
+                or InvoiceDocumentType.DeliveryNote
+                or InvoiceDocumentType.SalesOrder)
+            .WithMessage(
+                "New documents: Invoice, Proforma, Quote, DeliveryNote, SalesOrder. Use credit-note endpoint for dobropis.");
     }
 
     private static readonly HashSet<string> AllowedPaymentMethods =

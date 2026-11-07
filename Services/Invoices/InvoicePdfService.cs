@@ -426,6 +426,9 @@ public class InvoicePdfService(AppDbContext db, ITenantContext tenant) : IInvoic
     {
         InvoiceDocumentType.Proforma => "Zálohová faktúra",
         InvoiceDocumentType.CreditNote => "Dobropis",
+        InvoiceDocumentType.Quote => "Cenová ponuka",
+        InvoiceDocumentType.DeliveryNote => "Dodací list",
+        InvoiceDocumentType.SalesOrder => "Objednávka",
         _ => "Faktúra"
     };
 }

@@ -25,6 +25,7 @@ public record CreateInvoiceRequest(
     string? Notes,
     InvoiceStatus? Status,
     InvoiceDocumentType? DocumentType,
+    DocumentFlow? Flow,
     IReadOnlyList<CreateInvoiceItemRequest> Items
 );
 
@@ -80,6 +81,7 @@ public record InvoiceListItemResponse(
     Guid Id,
     string Number,
     InvoiceDocumentType DocumentType,
+    DocumentFlow Flow,
     InvoiceStatus Status,
     Guid CustomerId,
     string CustomerName,
@@ -111,6 +113,7 @@ public record InvoiceResponse(
     Guid Id,
     string Number,
     InvoiceDocumentType DocumentType,
+    DocumentFlow Flow,
     InvoiceStatus Status,
     Guid CustomerId,
     InvoicePartyResponse Customer,

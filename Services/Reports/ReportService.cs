@@ -92,7 +92,7 @@ public class ReportService(AppDbContext db, ITenantContext tenant) : IReportServ
         var invoices = await db.Invoices.Where(i => i.CompanyId == companyId)
             .AsNoTracking()
             .Where(i =>
-                i.DocumentType != InvoiceDocumentType.Proforma &&
+                InvoiceMapper.CountsTowardRevenue(i.DocumentType) &&
                 i.Status != InvoiceStatus.Cancelled &&
                 ((i.IssueDate >= from && i.IssueDate <= to) ||
                  (i.PaidAt != null && i.PaidAt >= from && i.PaidAt <= to)))
@@ -279,7 +279,7 @@ public class ReportService(AppDbContext db, ITenantContext tenant) : IReportServ
 
         var invoices = (await LoadInvoicesAsync(from, to, includeItems: true, ct))
             .Where(i =>
-                i.DocumentType != InvoiceDocumentType.Proforma
+                InvoiceMapper.CountsTowardRevenue(i.DocumentType)
                 && i.Status is InvoiceStatus.Issued or InvoiceStatus.Paid or InvoiceStatus.Overdue)
             .ToList();
 
@@ -328,7 +328,7 @@ public class ReportService(AppDbContext db, ITenantContext tenant) : IReportServ
     {
         var companyId = await tenant.GetCompanyIdAsync(ct);
         IQueryable<Invoice> query = db.Invoices.AsNoTracking()
-            .Where(i => i.CompanyId == companyId && i.DocumentType != InvoiceDocumentType.Proforma);
+            .Where(i => i.CompanyId == companyId && InvoiceMapper.CountsTowardRevenue(i.DocumentType));
         if (includeItems)
             query = query.Include(i => i.Items);
 

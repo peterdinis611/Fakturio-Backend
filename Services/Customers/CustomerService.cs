@@ -126,7 +126,7 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache, ITenantCo
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var invoices = await db.Invoices
             .AsNoTracking()
-            .Where(i => i.CustomerId == id && i.DocumentType != InvoiceDocumentType.Proforma)
+            .Where(i => i.CustomerId == id && InvoiceMapper.CountsTowardRevenue(i.DocumentType))
             .ToListAsync(ct);
 
         decimal SumSigned(IEnumerable<Invoice> list) =>

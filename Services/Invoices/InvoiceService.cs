@@ -34,6 +34,9 @@ public class InvoiceService(
         if (query.DocumentType.HasValue)
             invoices = invoices.Where(i => i.DocumentType == query.DocumentType.Value);
 
+        if (query.Flow.HasValue)
+            invoices = invoices.Where(i => i.Flow == query.Flow.Value);
+
         if (query.CustomerId.HasValue && query.CustomerId.Value != Guid.Empty)
             invoices = invoices.Where(i => i.CustomerId == query.CustomerId.Value);
 
@@ -51,7 +54,8 @@ public class InvoiceService(
         if (query.OverdueOnly == true)
         {
             invoices = invoices.Where(i =>
-                i.DocumentType == InvoiceDocumentType.Invoice
+                i.Flow == DocumentFlow.Issued
+                && i.DocumentType == InvoiceDocumentType.Invoice
                 && (i.Status == InvoiceStatus.Issued || i.Status == InvoiceStatus.Overdue)
                 && i.DueDate < today
                 && i.PaidAt == null);
@@ -119,6 +123,7 @@ public class InvoiceService(
             return Fail<InvoiceResponse>(itemsError);
 
         var documentType = request.DocumentType ?? InvoiceDocumentType.Invoice;
+        var flow = request.Flow ?? DocumentFlow.Issued;
         if (documentType == InvoiceDocumentType.CreditNote)
             return ServiceResult<InvoiceResponse>.BadRequest(
                 "Credit notes must be created from an existing invoice via POST /api/invoices/{id}/credit-note.",
@@ -163,13 +168,15 @@ public class InvoiceService(
             company?.InvoicePrefix,
             company?.ProformaPrefix,
             company?.CreditNotePrefix,
-            ct);
+            ct,
+            flow);
 
         var invoice = new Invoice
         {
             CompanyId = companyId,
             Number = number,
             DocumentType = documentType,
+            Flow = flow,
             Status = status,
             IssueDate = issueDate,
             DueDate = dueDate,
@@ -695,7 +702,7 @@ public class InvoiceService(
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var companyId = await tenant.GetCompanyIdAsync(ct);
         var query = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
-            .Where(i => i.DocumentType != InvoiceDocumentType.Proforma)
+            .Where(i => InvoiceMapper.CountsTowardRevenue(i.DocumentType))
             .AsQueryable();
 
         if (from.HasValue)

@@ -24,9 +24,10 @@ public sealed class InvoicesController(
         [FromQuery] DateOnly? issueFrom = null,
         [FromQuery] DateOnly? issueTo = null,
         [FromQuery] bool? overdueOnly = null,
+        [FromQuery] DocumentFlow? flow = null,
         CancellationToken ct = default)
         => Ok(await invoices.ListAsync(
-            new InvoiceListQuery(page, pageSize, status, documentType, customerId, search, issueFrom, issueTo, overdueOnly),
+            new InvoiceListQuery(page, pageSize, status, documentType, customerId, search, issueFrom, issueTo, overdueOnly, flow),
             ct));
 
     [HttpGet("stats")]
