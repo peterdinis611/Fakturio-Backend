@@ -3,6 +3,7 @@ using Fakturio.Api.Caching;
 using Fakturio.Api.Configuration;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Models;
+using Fakturio.Api.Services.Admin;
 using Fakturio.Api.Services.Audit;
 using Fakturio.Api.Services.Auth;
 using Fakturio.Api.Services.Company;
@@ -43,8 +44,11 @@ public static class DependencyInjection
         services.Configure<RegistryOptions>(configuration.GetSection(RegistryOptions.SectionName));
         services.Configure<FxOptions>(configuration.GetSection(FxOptions.SectionName));
         services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));
+        services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
+        services.AddSingleton<IAdminAccess, AdminAccess>();
         services.AddSingleton<IJobSettingsStore, JobSettingsStore>();
         services.AddSingleton<ILogoStorageService, LogoStorageService>();
+        services.AddScoped<IAdminService, AdminService>();
 
         var registry = configuration.GetSection(RegistryOptions.SectionName).Get<RegistryOptions>()
             ?? new RegistryOptions();

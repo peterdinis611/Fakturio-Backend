@@ -2,13 +2,16 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Fakturio.Api.Configuration;
+using Fakturio.Api.Interfaces;
 using Fakturio.Api.Models;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fakturio.Api.Services.Auth;
 
-public sealed class JwtTokenService(IOptions<JwtOptions> options)
+public sealed class JwtTokenService(
+    IOptions<JwtOptions> options,
+    IAdminAccess adminAccess)
 {
     public (string Token, DateTime ExpiresAt) CreateToken(AppUser user)
     {
@@ -32,6 +35,9 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options)
 
         if (!string.IsNullOrWhiteSpace(display))
             claims.Add(new Claim(ClaimTypes.Name, display));
+
+        if (adminAccess.IsAdminEmail(user.Email))
+            claims.Add(new Claim(ClaimTypes.Role, AdminAccess.RoleName));
 
         var token = new JwtSecurityToken(
             issuer: opts.Issuer,

@@ -13,6 +13,7 @@ namespace Fakturio.Api.Services.Auth;
 public sealed class AuthService(
     AppDbContext db,
     JwtTokenService tokens,
+    IAdminAccess adminAccess,
     IPasswordHasher<AppUser> passwordHasher) : IAuthService
 {
     public async Task<ServiceResult<AuthResponse>> RegisterAsync(
@@ -89,13 +90,16 @@ public sealed class AuthService(
         if (user is null)
             return null;
 
-        return UserMapper.ToResponse(user);
+        return UserMapper.ToResponse(user, adminAccess.IsAdminEmail(user.Email));
     }
 
     private AuthResponse BuildAuthResponse(AppUser user)
     {
         var (token, expires) = tokens.CreateToken(user);
-        return new AuthResponse(token, expires, UserMapper.ToResponse(user));
+        return new AuthResponse(
+            token,
+            expires,
+            UserMapper.ToResponse(user, adminAccess.IsAdminEmail(user.Email)));
     }
 
     private static string? NormalizeEmail(string? email) =>

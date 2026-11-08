@@ -1,6 +1,8 @@
 using System.Text;
+using Fakturio.Api.Authorization;
 using Fakturio.Api.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fakturio.Api.Extensions;
@@ -12,6 +14,7 @@ public static class JwtAuthenticationExtensions
         IConfiguration configuration)
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
         var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
             ?? new JwtOptions();
 
@@ -35,6 +38,7 @@ public static class JwtAuthenticationExtensions
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(1),
                     NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
+                    RoleClaimType = System.Security.Claims.ClaimTypes.Role,
                 };
 
                 // SignalR (browser WebSocket) sends JWT as ?access_token=
@@ -55,7 +59,12 @@ public static class JwtAuthenticationExtensions
                 };
             });
 
-        services.AddAuthorization();
+        services.AddSingleton<IAuthorizationHandler, AdminAuthorizationHandler>();
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy("Admin", policy =>
+                policy.Requirements.Add(new AdminRequirement()));
+        });
         return services;
     }
 }

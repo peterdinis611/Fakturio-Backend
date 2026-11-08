@@ -5,7 +5,7 @@ namespace Fakturio.Api.Mapping;
 
 public static class UserMapper
 {
-    public static UserResponse ToResponse(AppUser user) => new(
+    public static UserResponse ToResponse(AppUser user, bool isAdmin = false) => new(
         user.Id,
         user.Email,
         user.FirstName,
@@ -13,5 +13,6 @@ public static class UserMapper
         user.ImageUrl,
         user.CreatedAt,
         user.UpdatedAt,
-        user.LastSeenAt);
+        user.LastSeenAt,
+        isAdmin);
 }

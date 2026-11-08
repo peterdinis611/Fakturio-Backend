@@ -26,7 +26,8 @@ public record UserResponse(
     string? ImageUrl,
     DateTime CreatedAt,
     DateTime UpdatedAt,
-    DateTime? LastSeenAt
+    DateTime? LastSeenAt,
+    bool IsAdmin = false
 );
 
 public record UpdateUserRequest(

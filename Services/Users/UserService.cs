@@ -12,6 +12,7 @@ namespace Fakturio.Api.Services.Users;
 
 public sealed class UserService(
     AppDbContext db,
+    IAdminAccess adminAccess,
     IPasswordHasher<AppUser> passwordHasher) : IUserService
 {
     public async Task<PagedResponse<UserResponse>> ListAsync(
@@ -40,7 +41,7 @@ public sealed class UserService(
             .ToListAsync(ct);
 
         return new PagedResponse<UserResponse>(
-            items.Select(UserMapper.ToResponse).ToList(),
+            items.Select(u => UserMapper.ToResponse(u, adminAccess.IsAdminEmail(u.Email))).ToList(),
             page,
             pageSize,
             totalCount,
@@ -53,7 +54,7 @@ public sealed class UserService(
             return null;
 
         var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ct);
-        return user is null ? null : UserMapper.ToResponse(user);
+        return user is null ? null : UserMapper.ToResponse(user, adminAccess.IsAdminEmail(user.Email));
     }
 
     public async Task<ServiceResult<UserResponse>> UpdateAsync(
@@ -92,7 +93,8 @@ public sealed class UserService(
 
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
-        return ServiceResult<UserResponse>.Ok(UserMapper.ToResponse(user));
+        return ServiceResult<UserResponse>.Ok(
+            UserMapper.ToResponse(user, adminAccess.IsAdminEmail(user.Email)));
     }
 
     public async Task<ServiceResult> ChangePasswordAsync(
