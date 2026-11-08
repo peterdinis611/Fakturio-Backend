@@ -6,12 +6,13 @@ using Fakturio.Api.Services.Common;
 namespace Fakturio.Api.Services.Fx;
 
 /// <summary>
-/// Prefers ČNB for CZK pairs; Frankfurter (ECB) for everything else / fill-in.
+/// Prefers ČNB for CZK pairs, NBS (ECB list) for EUR base, Frankfurter as fill-in.
 /// Supports historical rates via <see cref="GetOnDateAsync"/>.
 /// </summary>
 public sealed class CompositeFxRateService(
     FrankfurterFxRateService frankfurter,
     CnbFxRateService cnb,
+    NbsFxRateService nbs,
     ILogger<CompositeFxRateService> logger) : IFxRateService
 {
     public Task<ServiceResult<FxRatesResponse>> GetLatestAsync(
@@ -78,11 +79,35 @@ public sealed class CompositeFxRateService(
             }
             else
             {
-                logger.LogDebug("CNB unavailable; falling back to Frankfurter for CZK");
+                logger.LogDebug("CNB unavailable; falling back for CZK");
             }
         }
 
-        var frankfurterSymbols = otherSymbols.ToList();
+        // NBS publishes ECB rates vs EUR — prefer for EUR base (SK official list).
+        if (baseCode == "EUR")
+        {
+            var missingForNbs = symbolList.Where(s => !rates.ContainsKey(s)).ToArray();
+            if (missingForNbs.Length > 0)
+            {
+                var nbsResult = await nbs.GetEurRatesAsync(onDate, ct);
+                if (nbsResult.Success && nbsResult.Data is { } nbsData)
+                {
+                    effectiveDate ??= nbsData.Date;
+                    sources.Add("nbs");
+                    foreach (var sym in missingForNbs)
+                    {
+                        if (nbsData.Rates.TryGetValue(sym, out var rate) && rate > 0)
+                            rates[sym] = rate;
+                    }
+                }
+                else
+                {
+                    logger.LogDebug("NBS unavailable; falling back to Frankfurter");
+                }
+            }
+        }
+
+        var frankfurterSymbols = otherSymbols.Where(s => !rates.ContainsKey(s)).ToList();
         if (symbolList.Contains("CZK", StringComparer.Ordinal) && !rates.ContainsKey("CZK"))
             frankfurterSymbols.Add("CZK");
 

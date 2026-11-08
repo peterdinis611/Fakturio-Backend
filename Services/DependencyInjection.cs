@@ -13,6 +13,7 @@ using Fakturio.Api.Services.Invoices;
 using Fakturio.Api.Services.Jobs;
 using Fakturio.Api.Services.Notes;
 using Fakturio.Api.Services.Address;
+using Fakturio.Api.Services.Calendar;
 using Fakturio.Api.Services.Payments;
 using Fakturio.Api.Services.Fx;
 using Fakturio.Api.Services.Iban;
@@ -92,6 +93,12 @@ public static class DependencyInjection
             client.BaseAddress = new Uri(EnsureTrailingSlash(fx.CnbBaseUrl));
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
         });
+        services.AddHttpClient("nbs", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(fx.NbsBaseUrl));
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
         services.AddHttpClient("openiban", client =>
         {
             client.BaseAddress = new Uri(EnsureTrailingSlash(registry.OpenIbanBaseUrl));
@@ -140,11 +147,14 @@ public static class DependencyInjection
         services.AddScoped<IAdisregService, AdisregService>();
         services.AddScoped<IIsirService, IsirService>();
         services.AddScoped<IRegisterUzService, RegisterUzService>();
+        services.AddScoped<IAresVrService, AresVrService>();
         services.AddScoped<IIbanLookupService, IbanLookupService>();
         services.AddSingleton<IAddressNormalizeService, NominatimAddressService>();
         services.AddSingleton<IPostalValidateService, PostalValidateService>();
+        services.AddSingleton<IBusinessDayService, BusinessDayService>();
         services.AddSingleton<FrankfurterFxRateService>();
         services.AddSingleton<CnbFxRateService>();
+        services.AddSingleton<NbsFxRateService>();
         services.AddSingleton<IFxRateService, CompositeFxRateService>();
 
         services.AddHostedService<OverdueSyncBackgroundService>();

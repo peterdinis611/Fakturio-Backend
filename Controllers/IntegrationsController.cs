@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
 
-/// <summary>Key-free external lookups: IBAN, FS DPH, Nominatim, ORSR, ADISREG, ISIR, RegisterUZ, PSČ.</summary>
+/// <summary>Key-free external lookups and local calendars.</summary>
 [Route("api/integrations")]
 public sealed class IntegrationsController(
     IIbanLookupService ibanLookup,
@@ -15,7 +15,9 @@ public sealed class IntegrationsController(
     IAdisregService adisreg,
     IIsirService isir,
     IRegisterUzService registerUz,
-    IPostalValidateService postal) : ApiControllerBase
+    IPostalValidateService postal,
+    IAresVrService aresVr,
+    IBusinessDayService businessDays) : ApiControllerBase
 {
     [HttpGet("iban")]
     [ProducesResponseType(typeof(IbanLookupResponse), StatusCodes.Status200OK)]
@@ -67,6 +69,21 @@ public sealed class IntegrationsController(
         CancellationToken ct)
         => (await registerUz.LookupByIcoAsync(ico, ct)).ToActionResult(this);
 
+    [HttpGet("register-uz/statements")]
+    [ProducesResponseType(typeof(RegisterUzStatementsResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RegisterUzStatementsResponse>> RegisterUzStatements(
+        [FromQuery] string ico,
+        [FromQuery] int take = 5,
+        CancellationToken ct = default)
+        => (await registerUz.LookupStatementsByIcoAsync(ico, take, ct)).ToActionResult(this);
+
+    [HttpGet("ares-vr/{ico}")]
+    [ProducesResponseType(typeof(AresVrSummaryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AresVrSummaryResponse>> AresVr(
+        string ico,
+        CancellationToken ct)
+        => (await aresVr.LookupByIcoAsync(ico, ct)).ToActionResult(this);
+
     [HttpGet("postal")]
     [ProducesResponseType(typeof(PostalValidateResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<PostalValidateResponse>> ValidatePostal(
@@ -75,4 +92,12 @@ public sealed class IntegrationsController(
         [FromQuery] string? city = null,
         CancellationToken ct = default)
         => (await postal.ValidateAsync(code, country, city, ct)).ToActionResult(this);
+
+    [HttpGet("business-day")]
+    [ProducesResponseType(typeof(BusinessDayResponse), StatusCodes.Status200OK)]
+    public ActionResult<BusinessDayResponse> BusinessDay(
+        [FromQuery] DateOnly from,
+        [FromQuery] int addDays = 0,
+        [FromQuery] string? country = "SK")
+        => businessDays.AddBusinessDays(from, addDays, country).ToActionResult(this);
 }

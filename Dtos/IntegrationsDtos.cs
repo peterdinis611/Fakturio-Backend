@@ -107,3 +107,47 @@ public record PostalValidateResponse(
     string? NormalizedCode,
     string Source
 );
+
+public record AresVrPersonItem(
+    string Name,
+    string? Role,
+    string? Organ,
+    string? Since
+);
+
+public record AresVrSummaryResponse(
+    string Ico,
+    string? Name,
+    string? CourtFile,
+    string? RegisteredCapital,
+    IReadOnlyList<AresVrPersonItem> Officers,
+    int OfficersCount,
+    string Source
+);
+
+public record RegisterUzStatementItem(
+    long Id,
+    string? Type,
+    string? PeriodFrom,
+    string? PeriodTo,
+    string? AssembledAt,
+    string? FiledAt,
+    int ReportsCount
+);
+
+public record RegisterUzStatementsResponse(
+    string Ico,
+    string? Name,
+    IReadOnlyList<RegisterUzStatementItem> Statements,
+    string Source
+);
+
+public record BusinessDayResponse(
+    string Country,
+    DateOnly From,
+    int AddDays,
+    DateOnly Result,
+    bool Adjusted,
+    IReadOnlyList<string> HolidaysSkipped,
+    string Source
+);
