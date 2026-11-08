@@ -14,6 +14,7 @@ public sealed class FakturioApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ConnectionStrings:Default", $"Data Source={_dbPath}");
         builder.UseSetting("Cache:UseRedis", "false");
         builder.UseSetting("Cache:Enabled", "true");
+        builder.UseSetting("BullMQ:Enabled", "false");
         builder.UseSetting("OverdueSync:Enabled", "false");
         builder.UseSetting("ReminderJob:Enabled", "false");
         builder.UseSetting("RecurringInvoices:Enabled", "false");

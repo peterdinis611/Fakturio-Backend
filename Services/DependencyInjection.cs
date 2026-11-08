@@ -20,6 +20,7 @@ using Fakturio.Api.Services.Fx;
 using Fakturio.Api.Services.Iban;
 using Fakturio.Api.Services.Registry;
 using Fakturio.Api.Services.Reminders;
+using Fakturio.Api.Services.BullMq;
 using Fakturio.Api.Services.Notifications;
 using Fakturio.Api.Services.Reports;
 using Fakturio.Api.Services.Resume;
@@ -189,7 +190,7 @@ public static class DependencyInjection
         services.AddHostedService<OverdueSyncBackgroundService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IReminderNotifier, SignalHubReminderNotifier>();
-        services.AddHostedService<ReminderBackgroundService>();
+        services.AddFakturioBullMq(configuration);
 
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentActorAccessor, CurrentActorAccessor>();
