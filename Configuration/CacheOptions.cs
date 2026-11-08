@@ -7,6 +7,21 @@ public sealed class CacheOptions
     /// <summary>Enable/disable application caching.</summary>
     public bool Enabled { get; set; } = true;
 
+    /// <summary>
+    /// When true and <see cref="RedisConnection"/> (or ConnectionStrings:Redis) is set,
+    /// HybridCache uses Redis as distributed L2. Otherwise L1 memory only.
+    /// </summary>
+    public bool UseRedis { get; set; } = true;
+
+    /// <summary>
+    /// Optional Redis connection (overrides ConnectionStrings:Redis when set).
+    /// Example: localhost:6379
+    /// </summary>
+    public string? RedisConnection { get; set; }
+
+    /// <summary>Key prefix for Redis entries (multi-tenant / multi-env isolation).</summary>
+    public string RedisInstanceName { get; set; } = "fakturio:";
+
     /// <summary>Default TTL for report endpoints.</summary>
     public int ReportsSeconds { get; set; } = 60;
 

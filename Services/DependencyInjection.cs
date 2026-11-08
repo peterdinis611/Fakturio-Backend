@@ -205,6 +205,25 @@ public static class DependencyInjection
         IConfiguration configuration)
     {
         services.Configure<CacheOptions>(configuration.GetSection(CacheOptions.SectionName));
+        var cache = configuration.GetSection(CacheOptions.SectionName).Get<CacheOptions>()
+            ?? new CacheOptions();
+
+        var redisConnection =
+            cache.RedisConnection
+            ?? configuration.GetConnectionString("Redis");
+
+        if (cache.UseRedis && !string.IsNullOrWhiteSpace(redisConnection))
+        {
+            services.AddStackExchangeRedisCache(options =>
+            {
+                options.Configuration = redisConnection;
+                options.InstanceName = string.IsNullOrWhiteSpace(cache.RedisInstanceName)
+                    ? "fakturio:"
+                    : cache.RedisInstanceName;
+            });
+        }
+
+        // HybridCache uses IDistributedCache as L2 when Redis is registered.
         services.AddHybridCache();
         return services;
     }

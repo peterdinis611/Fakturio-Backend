@@ -61,8 +61,8 @@ public sealed class GdprService(
             .Where(r => r.CompanyId == companyId)
             .OrderBy(r => r.Name)
             .ToListAsync(ct);
-        var audit = await db.AuditLogs.AsNoTracking()
-            .Where(a => a.ActorUserId == userId)
+        var auditLogs = await db.AuditLogs.AsNoTracking()
+            .Where(a => a.ActorUserId == userId || a.CompanyId == companyId)
             .OrderByDescending(a => a.OccurredAt)
             .Take(5_000)
             .ToListAsync(ct);
@@ -132,7 +132,7 @@ public sealed class GdprService(
                 r.Notes,
                 items = r.Items.OrderBy(i => i.SortOrder)
             }),
-            auditLog = audit.Select(a => new
+            auditLog = auditLogs.Select(a => new
             {
                 a.OccurredAt,
                 a.Action,
@@ -164,14 +164,14 @@ public sealed class GdprService(
         }
 
         await audit.WriteAsync(
-            action: AuditAction.GdprExport,
-            entityType: "Gdpr",
-            entityId: userId,
-            entityNumber: null,
-            summary: "Export osobných údajov (GDPR) stiahnutý.",
-            companyId: companyId,
-            details: new { companyId, customers = customers.Count, invoices = invoices.Count },
-            ct: ct);
+            AuditAction.GdprExport,
+            "Gdpr",
+            userId,
+            null,
+            "Export osobných údajov (GDPR) stiahnutý.",
+            companyId,
+            new { companyId, customers = customers.Count, invoices = invoices.Count },
+            ct);
 
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         return ServiceResult<ExportFile>.Ok(new ExportFile(

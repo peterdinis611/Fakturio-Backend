@@ -1,0 +1,13 @@
+**/bin
+**/obj
+**/TestResults
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/uploads
+**/Fakturio.Api.Tests
+**/.vs
+**/*.user
+**/*.md
+.dockerignore
+Dockerfile

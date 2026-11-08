@@ -1,50 +1,14 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Models;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
+using Fakturio.Api.Tests.TestHelpers;
 
 namespace Fakturio.Api.Tests;
 
-public sealed class FakturioApiFactory : WebApplicationFactory<Program>
-{
-    private readonly string _dbPath =
-        Path.Combine(Path.GetTempPath(), $"fakturio-test-{Guid.NewGuid():N}.db");
-
-    protected override void ConfigureWebHost(IWebHostBuilder builder)
-    {
-        builder.UseEnvironment("Development");
-        builder.UseSetting("ConnectionStrings:Default", $"Data Source={_dbPath}");
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        try
-        {
-            if (File.Exists(_dbPath))
-                File.Delete(_dbPath);
-        }
-        catch
-        {
-            // best-effort cleanup
-        }
-    }
-}
-
 public class LoginCreateInvoiceSmokeTests : IClassFixture<FakturioApiFactory>
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
-    };
-
     private readonly HttpClient _client;
 
     public LoginCreateInvoiceSmokeTests(FakturioApiFactory factory)
@@ -57,24 +21,14 @@ public class LoginCreateInvoiceSmokeTests : IClassFixture<FakturioApiFactory>
     {
         var health = await _client.GetAsync("/api/health");
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
-        var healthBody = await health.Content.ReadFromJsonAsync<JsonElement>();
+        var healthBody = await health.Content.ReadFromJsonAsync<JsonElement>(TestJson.Options);
         Assert.Equal("ok", healthBody.GetProperty("status").GetString());
         Assert.Equal("up", healthBody.GetProperty("database").GetString());
 
-        var loginRes = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequest(
-            DemoDataSeeder.Email,
-            DemoDataSeeder.Password));
-        Assert.Equal(HttpStatusCode.OK, loginRes.StatusCode);
-
-        var auth = await loginRes.Content.ReadFromJsonAsync<AuthResponse>(JsonOptions);
-        Assert.NotNull(auth);
-        Assert.False(string.IsNullOrWhiteSpace(auth.AccessToken));
-
-        _client.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("Bearer", auth.AccessToken);
+        await DemoAuth.LoginAsDemoAsync(_client);
 
         var create = new CreateInvoiceRequest(
-            CustomerId: Guid.Parse("a3333333-3333-3333-3333-333333333301"),
+            CustomerId: DemoAuth.DemoCustomerStudioId,
             IssueDate: DateOnly.FromDateTime(DateTime.UtcNow),
             DueDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
             DeliveryDate: null,
@@ -104,7 +58,7 @@ public class LoginCreateInvoiceSmokeTests : IClassFixture<FakturioApiFactory>
             invoiceRes.IsSuccessStatusCode,
             await invoiceRes.Content.ReadAsStringAsync());
 
-        var invoice = await invoiceRes.Content.ReadFromJsonAsync<InvoiceResponse>(JsonOptions);
+        var invoice = await invoiceRes.Content.ReadFromJsonAsync<InvoiceResponse>(TestJson.Options);
         Assert.NotNull(invoice);
         Assert.Equal(100.00m, invoice.Subtotal);
         Assert.Equal(23.00m, invoice.VatTotal);

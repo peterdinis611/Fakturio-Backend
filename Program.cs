@@ -62,6 +62,16 @@ try
     builder.Services.AddJwtAuthentication(builder.Configuration);
     builder.Services.AddSignalR();
 
+    var redisConnection =
+        builder.Configuration["Cache:RedisConnection"]
+        ?? builder.Configuration.GetConnectionString("Redis");
+    var healthChecks = builder.Services.AddHealthChecks();
+    if (!string.IsNullOrWhiteSpace(redisConnection)
+        && builder.Configuration.GetValue("Cache:UseRedis", true))
+    {
+        healthChecks.AddRedis(redisConnection, name: "redis");
+    }
+
     // SignalR negotiate uses credentials — AllowAnyOrigin is incompatible.
     var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
         ?? ["http://localhost:3000", "http://127.0.0.1:3000"];
@@ -115,11 +125,13 @@ try
     app.UseFakturioRequestLogging();
     app.UseExceptionHandler();
     app.UseCors();
-    app.UseHttpsRedirection();
+    if (!builder.Configuration.GetValue("DisableHttpsRedirection", false))
+        app.UseHttpsRedirection();
     app.UseAuthentication();
     app.UseMiddleware<UserIdLogContextMiddleware>();
     app.UseAuthorization();
     app.MapControllers();
+    app.MapHealthChecks("/health");
     app.MapHub<SignalHub>("/hubs/signal");
 
     app.Run();
