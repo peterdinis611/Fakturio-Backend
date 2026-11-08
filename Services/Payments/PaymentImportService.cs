@@ -14,7 +14,8 @@ namespace Fakturio.Api.Services.Payments;
 public sealed class PaymentImportService(
     AppDbContext db,
     ITenantContext tenant,
-    IInvoiceService invoices) : IPaymentImportService
+    IInvoiceService invoices,
+    IAuditLogService audit) : IPaymentImportService
 {
     private static readonly string[] VsHeaders =
     [
@@ -213,6 +214,17 @@ public sealed class PaymentImportService(
                     result.Error ?? "Failed to mark paid."));
             }
         }
+
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        await audit.WriteAsync(
+            AuditAction.PaymentImportApplied,
+            "PaymentImport",
+            null,
+            null,
+            $"Import platieb: {marked} označených ako zaplatené, {failed} zlyhaní.",
+            companyId,
+            new { marked, failed, total = request.Rows.Count },
+            ct);
 
         return ServiceResult<PaymentImportConfirmResponse>.Ok(
             new PaymentImportConfirmResponse(marked, failed, results));

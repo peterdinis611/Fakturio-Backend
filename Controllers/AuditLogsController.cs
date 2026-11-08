@@ -18,8 +18,9 @@ public sealed class AuditLogsController(IAuditLogService logs) : ApiControllerBa
         [FromQuery] string? search = null,
         [FromQuery] DateTime? from = null,
         [FromQuery] DateTime? to = null,
+        [FromQuery] string? entityType = null,
         CancellationToken ct = default)
         => Ok(await logs.ListAsync(
-            new AuditLogListQuery(page, pageSize, action, entityId, search, from, to),
+            new AuditLogListQuery(page, pageSize, action, entityId, search, from, to, entityType),
             ct));
 }

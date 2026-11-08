@@ -19,7 +19,8 @@ public sealed class GdprService(
     ITenantContext tenant,
     IPasswordHasher<AppUser> passwordHasher,
     ILogoStorageService logos,
-    ICacheInvalidator cache) : IGdprService
+    ICacheInvalidator cache,
+    IAuditLogService audit) : IGdprService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -162,6 +163,16 @@ public sealed class GdprService(
             WriteEntry(zip, "data.json", Encoding.UTF8.GetBytes(json));
         }
 
+        await audit.WriteAsync(
+            action: AuditAction.GdprExport,
+            entityType: "Gdpr",
+            entityId: userId,
+            entityNumber: null,
+            summary: "Export osobných údajov (GDPR) stiahnutý.",
+            companyId: companyId,
+            details: new { companyId, customers = customers.Count, invoices = invoices.Count },
+            ct: ct);
+
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
         return ServiceResult<ExportFile>.Ok(new ExportFile(
             ms.ToArray(),
@@ -219,7 +230,9 @@ public sealed class GdprService(
         await db.ServiceCatalogItems.Where(s => s.CompanyId == companyId).ExecuteDeleteAsync(ct);
         await db.Notes.Where(n => n.CompanyId == companyId).ExecuteDeleteAsync(ct);
         await db.Customers.Where(c => c.CompanyId == companyId).ExecuteDeleteAsync(ct);
-        await db.AuditLogs.Where(a => a.ActorUserId == userId).ExecuteDeleteAsync(ct);
+        await db.AuditLogs
+            .Where(a => a.CompanyId == companyId || a.ActorUserId == userId)
+            .ExecuteDeleteAsync(ct);
 
         if (company is not null)
             db.CompanySettings.Remove(company);

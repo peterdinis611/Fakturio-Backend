@@ -17,4 +17,14 @@ public interface IAuditLogService
         string summary,
         object? details = null,
         CancellationToken ct = default);
+
+    Task WriteAsync(
+        AuditAction action,
+        string entityType,
+        Guid? entityId,
+        string? entityNumber,
+        string summary,
+        Guid companyId,
+        object? details = null,
+        CancellationToken ct = default);
 }

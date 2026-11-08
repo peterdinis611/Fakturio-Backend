@@ -11,7 +11,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Exports;
 
-public class CsvExportService(AppDbContext db, ITenantContext tenant) : IExportService
+public class CsvExportService(
+    AppDbContext db,
+    ITenantContext tenant,
+    IAuditLogService audit) : IExportService
 {
     private static readonly CultureInfo Sk = CultureInfo.GetCultureInfo("sk-SK");
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -30,6 +33,8 @@ public class CsvExportService(AppDbContext db, ITenantContext tenant) : IExportS
             .OrderBy(i => i.IssueDate)
             .ThenBy(i => i.Number)
             .ToListAsync(ct);
+
+        await WriteExportAsync("invoices-csv", from, to, invoices.Count, ct);
 
         var sb = new StringBuilder();
         sb.AppendLine(string.Join(';',
@@ -121,6 +126,8 @@ public class CsvExportService(AppDbContext db, ITenantContext tenant) : IExportS
             }
         }
 
+        await WriteExportAsync("vat-csv", from, to, invoices.Count, ct);
+
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd", Inv);
         return OkCsv(sb.ToString(), $"dph-{stamp}.csv");
     }
@@ -140,6 +147,8 @@ public class CsvExportService(AppDbContext db, ITenantContext tenant) : IExportS
             .OrderBy(i => i.IssueDate)
             .ThenBy(i => i.Number)
             .ToListAsync(ct);
+
+        await WriteExportAsync("money-s3-xml", from, to, invoices.Count, ct);
 
         var bytes = MoneyS3XmlExport.Build(invoices, company?.Ico);
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd", Inv);
@@ -240,6 +249,31 @@ public class CsvExportService(AppDbContext db, ITenantContext tenant) : IExportS
 
     private static ServiceResult<ExportFile> Fail(ServiceResult error) =>
         ServiceResult<ExportFile>.Fail(error.Error!, error.StatusCode, error.ErrorCode);
+
+    private async Task WriteExportAsync(
+        string format,
+        DateOnly? from,
+        DateOnly? to,
+        int rowCount,
+        CancellationToken ct)
+    {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        await audit.WriteAsync(
+            AuditAction.ExportRequested,
+            "Export",
+            null,
+            format,
+            $"Export {format} ({rowCount} dokladov).",
+            companyId,
+            new
+            {
+                format,
+                from = from?.ToString("yyyy-MM-dd", Inv),
+                to = to?.ToString("yyyy-MM-dd", Inv),
+                rowCount
+            },
+            ct);
+    }
 
     private static string Csv(string value)
     {

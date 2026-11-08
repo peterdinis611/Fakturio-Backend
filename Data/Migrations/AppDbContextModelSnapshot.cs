@@ -489,6 +489,9 @@ namespace Fakturio.Api.Data.Migrations
                     b.Property<Guid?>("ActorUserId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("DetailsJson")
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
@@ -517,9 +520,13 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.HasIndex("Action");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("EntityId");
 
                     b.HasIndex("OccurredAt");
+
+                    b.HasIndex("CompanyId", "OccurredAt");
 
                     b.ToTable("AuditLogs");
                 });

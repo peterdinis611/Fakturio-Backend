@@ -14,7 +14,8 @@ public record AuditLogEntryResponse(
     string? ActorDisplayName,
     string? ActorEmail,
     string Summary,
-    string? DetailsJson
+    string? DetailsJson,
+    Guid? CompanyId = null
 );
 
 public record AuditLogListQuery(
@@ -24,5 +25,6 @@ public record AuditLogListQuery(
     Guid? EntityId = null,
     string? Search = null,
     DateTime? From = null,
-    DateTime? To = null
+    DateTime? To = null,
+    string? EntityType = null
 );

@@ -14,7 +14,8 @@ public class CompanyService(
     AppDbContext db,
     ICacheInvalidator cache,
     ILogoStorageService logos,
-    ITenantContext tenant) : ICompanyService
+    ITenantContext tenant,
+    IAuditLogService audit) : ICompanyService
 {
     public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
@@ -57,6 +58,7 @@ public class CompanyService(
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.Apply(company, request);
         await SaveAndInvalidateAsync(ct);
+        await WriteCompanyUpdatedAsync(company, "identity", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
@@ -67,6 +69,7 @@ public class CompanyService(
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyDefaults(company, request);
         await SaveAndInvalidateAsync(ct);
+        await WriteCompanyUpdatedAsync(company, "defaults", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
@@ -77,6 +80,7 @@ public class CompanyService(
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyBank(company, request);
         await SaveAndInvalidateAsync(ct);
+        await WriteCompanyUpdatedAsync(company, "bank", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
@@ -87,6 +91,7 @@ public class CompanyService(
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyBranding(company, request);
         await SaveAndInvalidateAsync(ct);
+        await WriteCompanyUpdatedAsync(company, "branding", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
@@ -97,6 +102,7 @@ public class CompanyService(
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyContact(company, request);
         await SaveAndInvalidateAsync(ct);
+        await WriteCompanyUpdatedAsync(company, "contact", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
@@ -120,6 +126,7 @@ public class CompanyService(
         if (!string.Equals(previous, saved.Data, StringComparison.OrdinalIgnoreCase))
             await logos.DeleteIfLocalAsync(previous, ct);
 
+        await WriteCompanyUpdatedAsync(company, "logo", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
     }
 
@@ -132,7 +139,24 @@ public class CompanyService(
         company.UpdatedAt = DateTime.UtcNow;
         await SaveAndInvalidateAsync(ct);
         await logos.DeleteIfLocalAsync(previous, ct);
+        await WriteCompanyUpdatedAsync(company, "logo", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));
+    }
+
+    private async Task WriteCompanyUpdatedAsync(
+        CompanySettings company,
+        string section,
+        CancellationToken ct)
+    {
+        await audit.WriteAsync(
+            AuditAction.CompanyUpdated,
+            "Company",
+            company.Id,
+            company.Ico,
+            $"Nastavenia firmy upravené ({section}).",
+            company.Id,
+            new { section, name = company.Name },
+            ct);
     }
 
     private async Task<CompanySettings> GetOrCreateAsync(CancellationToken ct)

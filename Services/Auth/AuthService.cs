@@ -14,7 +14,8 @@ public sealed class AuthService(
     AppDbContext db,
     JwtTokenService tokens,
     IAdminAccess adminAccess,
-    IPasswordHasher<AppUser> passwordHasher) : IAuthService
+    IPasswordHasher<AppUser> passwordHasher,
+    IAuditLogService audit) : IAuthService
 {
     public async Task<ServiceResult<AuthResponse>> RegisterAsync(
         RegisterRequest request,
@@ -80,6 +81,35 @@ public sealed class AuthService(
         user.LastSeenAt = DateTime.UtcNow;
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        var companyId = await db.CompanySettings.AsNoTracking()
+            .Where(c => c.UserId == user.Id)
+            .Select(c => (Guid?)c.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (companyId is Guid cid)
+        {
+            await audit.WriteAsync(
+                AuditAction.LoginSucceeded,
+                "Auth",
+                user.Id,
+                user.Email,
+                "Prihlásenie úspešné.",
+                cid,
+                new { email = user.Email },
+                ct);
+        }
+        else
+        {
+            await audit.WriteAsync(
+                AuditAction.LoginSucceeded,
+                "Auth",
+                user.Id,
+                user.Email,
+                "Prihlásenie úspešné.",
+                new { email = user.Email },
+                ct);
+        }
 
         return ServiceResult<AuthResponse>.Ok(BuildAuthResponse(user));
     }

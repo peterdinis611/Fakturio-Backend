@@ -108,6 +108,16 @@ public sealed class RecurringInvoiceService(
         db.RecurringInvoices.Add(entity);
         await db.SaveChangesAsync(ct);
 
+        await audit.WriteAsync(
+            AuditAction.RecurringCreated,
+            "Recurring",
+            entity.Id,
+            entity.Name,
+            $"Opakovaná faktúra „{entity.Name}“ vytvorená.",
+            companyId,
+            new { customerId = entity.CustomerId, interval = entity.Interval.ToString() },
+            ct);
+
         await db.Entry(entity).Reference(r => r.Customer).LoadAsync(ct);
         return ServiceResult<RecurringInvoiceResponse>.Created(ToResponse(entity));
     }
@@ -156,6 +166,17 @@ public sealed class RecurringInvoiceService(
         ApplyItems(entity, request.Items!, company);
 
         await db.SaveChangesAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.RecurringUpdated,
+            "Recurring",
+            entity.Id,
+            entity.Name,
+            $"Opakovaná faktúra „{entity.Name}“ upravená.",
+            companyId,
+            new { customerId = entity.CustomerId, isActive = entity.IsActive },
+            ct);
+
         entity.Customer = customer;
         return ServiceResult<RecurringInvoiceResponse>.Ok(ToResponse(entity));
     }
@@ -168,8 +189,20 @@ public sealed class RecurringInvoiceService(
         if (entity is null)
             return ServiceResult.NotFound("Recurring invoice not found.", ErrorCodes.NotFound);
 
+        var name = entity.Name;
         db.RecurringInvoices.Remove(entity);
         await db.SaveChangesAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.RecurringDeleted,
+            "Recurring",
+            id,
+            name,
+            $"Opakovaná faktúra „{name}“ zmazaná.",
+            companyId,
+            null,
+            ct);
+
         return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 
@@ -327,11 +360,12 @@ public sealed class RecurringInvoiceService(
         await db.SaveChangesAsync(ct);
 
         await audit.WriteAsync(
-            AuditAction.Created,
+            AuditAction.RecurringGenerated,
             "Invoice",
             invoice.Id,
             invoice.Number,
             $"Opakovaná faktúra {invoice.Number} vytvorená zo šablóny „{template.Name}“.",
+            template.CompanyId,
             new { recurringId = template.Id, template = template.Name },
             ct);
 

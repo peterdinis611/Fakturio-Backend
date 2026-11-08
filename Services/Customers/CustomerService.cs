@@ -11,7 +11,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Customers;
 
-public class CustomerService(AppDbContext db, ICacheInvalidator cache, ITenantContext tenant) : ICustomerService
+public class CustomerService(
+    AppDbContext db,
+    ICacheInvalidator cache,
+    ITenantContext tenant,
+    IAuditLogService audit) : ICustomerService
 {
     public async Task<PagedResponse<CustomerResponse>> ListAsync(
         int page,
@@ -190,6 +194,16 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache, ITenantCo
         db.Customers.Add(customer);
         await SaveAndInvalidateAsync(ct);
 
+        await audit.WriteAsync(
+            AuditAction.CustomerCreated,
+            "Customer",
+            customer.Id,
+            customer.Ico,
+            $"Odberateľ „{customer.Name}“ vytvorený.",
+            companyId,
+            new { name = customer.Name, ico = customer.Ico },
+            ct);
+
         return ServiceResult<CustomerResponse>.Created(CustomerMapper.ToResponse(customer));
     }
 
@@ -233,6 +247,16 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache, ITenantCo
         CustomerMapper.Apply(customer, request);
         await SaveAndInvalidateAsync(ct);
 
+        await audit.WriteAsync(
+            AuditAction.CustomerUpdated,
+            "Customer",
+            customer.Id,
+            customer.Ico,
+            $"Odberateľ „{customer.Name}“ upravený.",
+            companyId,
+            new { name = customer.Name, ico = customer.Ico },
+            ct);
+
         var invoiceCount = await db.Invoices.CountAsync(i => i.CustomerId == id, ct);
         return ServiceResult<CustomerResponse>.Ok(CustomerMapper.ToResponse(customer, invoiceCount));
     }
@@ -253,8 +277,21 @@ public class CustomerService(AppDbContext db, ICacheInvalidator cache, ITenantCo
                 "Customer has invoices and cannot be deleted.",
                 ErrorCodes.HasInvoices);
 
+        var name = customer.Name;
+        var ico = customer.Ico;
         db.Customers.Remove(customer);
         await SaveAndInvalidateAsync(ct);
+
+        await audit.WriteAsync(
+            AuditAction.CustomerDeleted,
+            "Customer",
+            id,
+            ico,
+            $"Odberateľ „{name}“ zmazaný.",
+            companyId,
+            new { name, ico },
+            ct);
+
         return ServiceResult.Ok(StatusCodes.Status204NoContent);
     }
 

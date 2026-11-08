@@ -211,6 +211,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         modelBuilder.Entity<AuditLogEntry>(entity =>
         {
             entity.HasKey(a => a.Id);
+            entity.Property(a => a.CompanyId);
             entity.Property(a => a.EntityType).HasMaxLength(40).IsRequired();
             entity.Property(a => a.EntityNumber).HasMaxLength(50);
             entity.Property(a => a.ActorClerkUserId).HasMaxLength(128);
@@ -221,6 +222,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasIndex(a => a.OccurredAt);
             entity.HasIndex(a => a.Action);
             entity.HasIndex(a => a.EntityId);
+            entity.HasIndex(a => a.CompanyId);
+            entity.HasIndex(a => new { a.CompanyId, a.OccurredAt });
         });
 
         modelBuilder.Entity<Note>(entity =>

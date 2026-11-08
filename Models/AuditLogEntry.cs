@@ -5,6 +5,9 @@ public class AuditLogEntry
     public Guid Id { get; set; } = Guid.NewGuid();
     public DateTime OccurredAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Owning company; null only for legacy rows before tenancy backfill.</summary>
+    public Guid? CompanyId { get; set; }
+
     public AuditAction Action { get; set; }
     public string EntityType { get; set; } = "Invoice";
     public Guid? EntityId { get; set; }

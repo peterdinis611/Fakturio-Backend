@@ -10,7 +10,8 @@ namespace Fakturio.Api.Services.Audit;
 
 public sealed class AuditLogService(
     AppDbContext db,
-    ICurrentActorAccessor actors) : IAuditLogService
+    ICurrentActorAccessor actors,
+    ITenantContext tenant) : IAuditLogService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -25,14 +26,25 @@ public sealed class AuditLogService(
         var (page, pageSize) = ServiceGuards.NormalizePaging(query.Page, query.PageSize);
         pageSize = Math.Clamp(pageSize, 1, 100);
         var search = ServiceGuards.NormalizeOptionalSearch(query.Search);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var userId = await tenant.GetUserIdAsync(ct);
 
-        var logs = db.AuditLogs.AsNoTracking().AsQueryable();
+        var logs = db.AuditLogs.AsNoTracking()
+            .Where(l =>
+                l.CompanyId == companyId ||
+                (l.CompanyId == null && l.ActorUserId == userId));
 
         if (query.Action.HasValue)
             logs = logs.Where(l => l.Action == query.Action.Value);
 
         if (query.EntityId.HasValue && query.EntityId.Value != Guid.Empty)
             logs = logs.Where(l => l.EntityId == query.EntityId.Value);
+
+        if (!string.IsNullOrWhiteSpace(query.EntityType))
+        {
+            var type = query.EntityType.Trim();
+            logs = logs.Where(l => l.EntityType == type);
+        }
 
         if (query.From.HasValue)
             logs = logs.Where(l => l.OccurredAt >= query.From.Value);
@@ -45,6 +57,7 @@ public sealed class AuditLogService(
             logs = logs.Where(l =>
                 l.Summary.Contains(search) ||
                 (l.EntityNumber != null && l.EntityNumber.Contains(search)) ||
+                (l.EntityType != null && l.EntityType.Contains(search)) ||
                 (l.ActorDisplayName != null && l.ActorDisplayName.Contains(search)) ||
                 (l.ActorEmail != null && l.ActorEmail.Contains(search)));
         }
@@ -65,7 +78,7 @@ public sealed class AuditLogService(
             (int)Math.Ceiling(totalCount / (double)pageSize));
     }
 
-    public async Task WriteAsync(
+    public Task WriteAsync(
         AuditAction action,
         string entityType,
         Guid? entityId,
@@ -73,10 +86,46 @@ public sealed class AuditLogService(
         string summary,
         object? details = null,
         CancellationToken ct = default)
+        => WriteCoreAsync(action, entityType, entityId, entityNumber, summary, details, null, ct);
+
+    public Task WriteAsync(
+        AuditAction action,
+        string entityType,
+        Guid? entityId,
+        string? entityNumber,
+        string summary,
+        Guid companyId,
+        object? details = null,
+        CancellationToken ct = default)
+        => WriteCoreAsync(action, entityType, entityId, entityNumber, summary, details, companyId, ct);
+
+    private async Task WriteCoreAsync(
+        AuditAction action,
+        string entityType,
+        Guid? entityId,
+        string? entityNumber,
+        string summary,
+        object? details,
+        Guid? companyId,
+        CancellationToken ct)
     {
         var actor = await actors.GetAsync(ct);
+        var resolvedCompanyId = companyId;
+        if (resolvedCompanyId is null || resolvedCompanyId == Guid.Empty)
+        {
+            try
+            {
+                resolvedCompanyId = await tenant.GetCompanyIdAsync(ct);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                resolvedCompanyId = null;
+            }
+        }
+
         var entry = new AuditLogEntry
         {
+            CompanyId = resolvedCompanyId,
             Action = action,
             EntityType = entityType,
             EntityId = entityId,
@@ -108,5 +157,6 @@ public sealed class AuditLogService(
         e.ActorDisplayName,
         e.ActorEmail,
         e.Summary,
-        e.DetailsJson);
+        e.DetailsJson,
+        e.CompanyId);
 }
