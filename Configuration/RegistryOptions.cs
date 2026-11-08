@@ -32,6 +32,18 @@ public sealed class RegistryOptions
     /// <summary>OSM Nominatim — address normalize (rate-limited).</summary>
     public string NominatimBaseUrl { get; set; } = "https://nominatim.openstreetmap.org/";
 
+    /// <summary>MF ČR ADISREG — nespolehlivý plátce DPH + účty (SOAP).</summary>
+    public string AdisregBaseUrl { get; set; } =
+        "https://adisrws.mfcr.cz/dpr/axis2/services/rozhraniCRPDPH.rozhraniCRPDPHSOAP";
+
+    /// <summary>ISIR CUZK WS — insolvenční rejstřík (SOAP).</summary>
+    public string IsirBaseUrl { get; set; } =
+        "https://isir.justice.cz:8443/isir_cuzk_ws/IsirWsCuzkService";
+
+    /// <summary>Register účtovných závierok (RÚZ) — SK accounting units.</summary>
+    public string RegisterUzBaseUrl { get; set; } =
+        "https://www.registeruz.sk/cruz-public/api/";
+
     /// <summary>Prefer ORSF over RPO for SK IČO lookup (falls back to RPO).</summary>
     public bool PreferOrsf { get; set; } = true;
 

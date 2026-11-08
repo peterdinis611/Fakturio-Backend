@@ -112,13 +112,37 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
+        services.AddHttpClient("adisreg", client =>
+        {
+            // Full SOAP endpoint — keep exact path (no trailing slash).
+            client.BaseAddress = new Uri(registry.AdisregBaseUrl.TrimEnd('/'));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("isir", client =>
+        {
+            client.BaseAddress = new Uri(registry.IsirBaseUrl.TrimEnd('/'));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("registeruz", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.RegisterUzBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
 
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
         services.AddScoped<IVatVerificationService, VatVerificationService>();
         services.AddScoped<IFsVatPayerService, FsVatPayerService>();
         services.AddScoped<IOrsrService, OrsrService>();
+        services.AddScoped<IAdisregService, AdisregService>();
+        services.AddScoped<IIsirService, IsirService>();
+        services.AddScoped<IRegisterUzService, RegisterUzService>();
         services.AddScoped<IIbanLookupService, IbanLookupService>();
         services.AddSingleton<IAddressNormalizeService, NominatimAddressService>();
+        services.AddSingleton<IPostalValidateService, PostalValidateService>();
         services.AddSingleton<FrankfurterFxRateService>();
         services.AddSingleton<CnbFxRateService>();
         services.AddSingleton<IFxRateService, CompositeFxRateService>();

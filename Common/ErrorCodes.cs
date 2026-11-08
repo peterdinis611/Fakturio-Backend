@@ -43,6 +43,13 @@ public static class ErrorCodes
     public const string FsUnavailable = "fs_unavailable";
     public const string AddressUnavailable = "address_unavailable";
     public const string OrsrUnavailable = "orsr_unavailable";
+    public const string AdisregUnavailable = "adisreg_unavailable";
+    public const string IsirUnavailable = "isir_unavailable";
+    public const string RegisterUzUnavailable = "register_uz_unavailable";
+    public const string InvalidPostalCode = "invalid_postal_code";
+    public const string PostalUnavailable = "postal_unavailable";
+    public const string AresVrUnavailable = "ares_vr_unavailable";
+    public const string BusinessDayUnavailable = "business_day_unavailable";
 
     public const string FileTooLarge = "file_too_large";
     public const string InvalidFileType = "invalid_file_type";
