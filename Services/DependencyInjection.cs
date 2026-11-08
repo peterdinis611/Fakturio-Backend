@@ -143,6 +143,28 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
+        services.AddHttpClient("rpvs", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.RpvsBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("registrsmluv", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.RegistrSmluvBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0 (invoice-app; contact@fakturio.local)");
+        });
+        services.AddHttpClient("gleif", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.GleifBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.api+json"));
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
 
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
         services.AddScoped<IVatVerificationService, VatVerificationService>();
@@ -152,6 +174,9 @@ public static class DependencyInjection
         services.AddScoped<IIsirService, IsirService>();
         services.AddScoped<IRegisterUzService, RegisterUzService>();
         services.AddScoped<IAresVrService, AresVrService>();
+        services.AddScoped<IRpvsService, RpvsService>();
+        services.AddScoped<IRegistrSmluvService, RegistrSmluvService>();
+        services.AddScoped<ILeiLookupService, LeiLookupService>();
         services.AddScoped<IIbanLookupService, IbanLookupService>();
         services.AddSingleton<IAddressNormalizeService, NominatimAddressService>();
         services.AddSingleton<IPostalValidateService, PostalValidateService>();

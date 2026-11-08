@@ -7,7 +7,8 @@ using Fakturio.Api.Tests.TestHelpers;
 
 namespace Fakturio.Api.Tests;
 
-public class LoginCreateInvoiceSmokeTests : IClassFixture<FakturioApiFactory>
+[Collection(ApiFactoryCollection.Name)]
+public class LoginCreateInvoiceSmokeTests
 {
     private readonly HttpClient _client;
 

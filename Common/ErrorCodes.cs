@@ -50,6 +50,9 @@ public static class ErrorCodes
     public const string PostalUnavailable = "postal_unavailable";
     public const string AresVrUnavailable = "ares_vr_unavailable";
     public const string BusinessDayUnavailable = "business_day_unavailable";
+    public const string RpvsUnavailable = "rpvs_unavailable";
+    public const string RegistrSmluvUnavailable = "registr_smluv_unavailable";
+    public const string LeiUnavailable = "lei_unavailable";
 
     public const string FileTooLarge = "file_too_large";
     public const string InvalidFileType = "invalid_file_type";

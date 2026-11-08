@@ -17,7 +17,10 @@ public sealed class IntegrationsController(
     IRegisterUzService registerUz,
     IPostalValidateService postal,
     IAresVrService aresVr,
-    IBusinessDayService businessDays) : ApiControllerBase
+    IBusinessDayService businessDays,
+    IRpvsService rpvs,
+    IRegistrSmluvService registrSmluv,
+    ILeiLookupService lei) : ApiControllerBase
 {
     [HttpGet("iban")]
     [ProducesResponseType(typeof(IbanLookupResponse), StatusCodes.Status200OK)]
@@ -100,4 +103,33 @@ public sealed class IntegrationsController(
         [FromQuery] int addDays = 0,
         [FromQuery] string? country = "SK")
         => businessDays.AddBusinessDays(from, addDays, country).ToActionResult(this);
+
+    [HttpGet("rpvs")]
+    [ProducesResponseType(typeof(RpvsStatusResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RpvsStatusResponse>> Rpvs(
+        [FromQuery] string ico,
+        CancellationToken ct)
+        => (await rpvs.LookupByIcoAsync(ico, ct)).ToActionResult(this);
+
+    [HttpGet("registr-smluv")]
+    [ProducesResponseType(typeof(RegistrSmluvStatusResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<RegistrSmluvStatusResponse>> RegistrSmluv(
+        [FromQuery] string ico,
+        CancellationToken ct)
+        => (await registrSmluv.LookupByIcoAsync(ico, ct)).ToActionResult(this);
+
+    [HttpGet("lei")]
+    [ProducesResponseType(typeof(LeiLookupResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LeiLookupResponse>> LeiByIco(
+        [FromQuery] string ico,
+        [FromQuery] string? jurisdiction = null,
+        CancellationToken ct = default)
+        => (await lei.LookupByIcoAsync(ico, jurisdiction, ct)).ToActionResult(this);
+
+    [HttpGet("lei/{leiCode}")]
+    [ProducesResponseType(typeof(LeiLookupResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<LeiLookupResponse>> LeiByCode(
+        string leiCode,
+        CancellationToken ct)
+        => (await lei.LookupByLeiAsync(leiCode, ct)).ToActionResult(this);
 }

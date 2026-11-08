@@ -7,7 +7,8 @@ using Fakturio.Api.Tests.TestHelpers;
 
 namespace Fakturio.Api.Tests;
 
-public class AuthAuditTests : IClassFixture<FakturioApiFactory>
+[Collection(ApiFactoryCollection.Name)]
+public class AuthAuditTests
 {
     private readonly FakturioApiFactory _factory;
 
@@ -52,27 +53,44 @@ public class AuthAuditTests : IClassFixture<FakturioApiFactory>
     {
         var demoClient = _factory.CreateClient();
         await DemoAuth.LoginAsDemoAsync(demoClient);
+
+        var createRes = await demoClient.PostAsJsonAsync("/api/invoices", new CreateInvoiceRequest(
+            CustomerId: DemoAuth.DemoCustomerStudioId,
+            IssueDate: DateOnly.FromDateTime(DateTime.UtcNow),
+            DueDate: DateOnly.FromDateTime(DateTime.UtcNow.AddDays(14)),
+            DeliveryDate: null,
+            Currency: "EUR",
+            VariableSymbol: null,
+            ConstantSymbol: null,
+            SpecificSymbol: null,
+            PaymentMethod: "bank_transfer",
+            BankIban: null,
+            BankBic: null,
+            Notes: "tenant isolation",
+            Status: InvoiceStatus.Draft,
+            DocumentType: InvoiceDocumentType.Invoice,
+            Flow: DocumentFlow.Issued,
+            Items: [new CreateInvoiceItemRequest("Isolation", "ks", 1, 10m, 23m)]));
+        Assert.True(createRes.IsSuccessStatusCode, await createRes.Content.ReadAsStringAsync());
+        var invoice = await createRes.Content.ReadFromJsonAsync<InvoiceResponse>(TestJson.Options);
+        Assert.NotNull(invoice);
+
         var demoLogs = await demoClient.GetFromJsonAsync<PagedResponse<AuditLogEntryResponse>>(
-            "/api/logs?pageSize=100",
+            $"/api/logs?entityId={invoice.Id}&pageSize=20",
             TestJson.Options);
         Assert.NotNull(demoLogs);
-        Assert.Contains(demoLogs.Items, l =>
-            l.EntityNumber is not null && l.EntityNumber.StartsWith("FA2026", StringComparison.Ordinal));
+        Assert.NotEmpty(demoLogs.Items);
 
         var other = _factory.CreateClient();
         var email = $"tenant-{Guid.NewGuid():N}@example.com";
         await DemoAuth.RegisterAndLoginAsync(other, email);
-
-        // Touch a tenant-scoped endpoint so CompanySettings is created.
-        var customers = await other.GetAsync("/api/customers");
-        customers.EnsureSuccessStatusCode();
+        (await other.GetAsync("/api/customers")).EnsureSuccessStatusCode();
 
         var otherLogs = await other.GetFromJsonAsync<PagedResponse<AuditLogEntryResponse>>(
-            "/api/logs?pageSize=100",
+            $"/api/logs?entityId={invoice.Id}&pageSize=20",
             TestJson.Options);
         Assert.NotNull(otherLogs);
-        Assert.DoesNotContain(otherLogs.Items, l =>
-            l.EntityNumber is not null && l.EntityNumber.StartsWith("FA2026", StringComparison.Ordinal));
+        Assert.Empty(otherLogs.Items);
     }
 
     [Fact]

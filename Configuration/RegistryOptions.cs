@@ -44,6 +44,15 @@ public sealed class RegistryOptions
     public string RegisterUzBaseUrl { get; set; } =
         "https://www.registeruz.sk/cruz-public/api/";
 
+    /// <summary>RPVS OpenData v2 — SK public-sector partners (OData, no key).</summary>
+    public string RpvsBaseUrl { get; set; } = "https://rpvs.gov.sk/opendatav2/";
+
+    /// <summary>Registr smluv portal — CZ public contracts search (HTML, no key).</summary>
+    public string RegistrSmluvBaseUrl { get; set; } = "https://smlouvy.gov.cz/";
+
+    /// <summary>GLEIF LEI API — global legal entity identifiers (no key).</summary>
+    public string GleifBaseUrl { get; set; } = "https://api.gleif.org/api/v1/";
+
     /// <summary>Prefer ORSF over RPO for SK IČO lookup (falls back to RPO).</summary>
     public bool PreferOrsf { get; set; } = true;
 

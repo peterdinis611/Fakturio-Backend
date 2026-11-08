@@ -151,3 +151,71 @@ public record BusinessDayResponse(
     IReadOnlyList<string> HolidaysSkipped,
     string Source
 );
+
+public record RpvsOwnerItem(
+    string Name,
+    bool IsPublicOfficial,
+    string? ValidFrom,
+    string? ValidTo
+);
+
+public record RpvsRegistrationItem(
+    long Id,
+    string? Name,
+    string? ValidFrom,
+    string? ValidTo,
+    bool IsActive,
+    long? PartnerId,
+    int? FileNumber
+);
+
+public record RpvsStatusResponse(
+    string Ico,
+    bool IsRegistered,
+    string? Name,
+    long? PartnerId,
+    int? FileNumber,
+    string? PortalUrl,
+    IReadOnlyList<RpvsRegistrationItem> Registrations,
+    IReadOnlyList<RpvsOwnerItem> BeneficialOwners,
+    string Source
+);
+
+public record RegistrSmluvContractItem(
+    string? SubjectName,
+    string? Description,
+    string? PublishedAt,
+    string? Value,
+    string? PartyName,
+    string? DetailUrl
+);
+
+public record RegistrSmluvStatusResponse(
+    string Ico,
+    bool Found,
+    int TotalCount,
+    string PortalUrl,
+    IReadOnlyList<RegistrSmluvContractItem> Recent,
+    string Source
+);
+
+public record LeiRecordItem(
+    string Lei,
+    string? LegalName,
+    string? Jurisdiction,
+    string? RegisteredAs,
+    string? EntityStatus,
+    string? RegistrationStatus,
+    string? NextRenewalDate,
+    string? City,
+    string? Country,
+    string? DetailUrl
+);
+
+public record LeiLookupResponse(
+    string Query,
+    bool Found,
+    int Count,
+    IReadOnlyList<LeiRecordItem> Records,
+    string Source
+);
