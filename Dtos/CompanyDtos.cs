@@ -50,7 +50,8 @@ public record UpdateCompanyBankRequest(
     string? BankBic,
     string? BankName,
     string? DefaultPaymentMethod,
-    string? DefaultConstantSymbol
+    string? DefaultConstantSymbol,
+    string? FioBankToken
 );
 
 public record UpdateCompanyBrandingRequest(
@@ -76,7 +77,8 @@ public record CompanyBankResponse(
     string? BankBic,
     string? BankName,
     string? DefaultPaymentMethod,
-    string? DefaultConstantSymbol
+    string? DefaultConstantSymbol,
+    bool HasFioBankToken
 );
 
 public record CompanySettingsResponse(
@@ -100,6 +102,7 @@ public record CompanySettingsResponse(
     string? BankIban,
     string? BankBic,
     string? BankName,
+    bool HasFioBankToken,
     int DefaultDueDays,
     decimal DefaultVatRate,
     string DefaultCurrency,

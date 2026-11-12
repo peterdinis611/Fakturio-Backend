@@ -45,6 +45,7 @@ public static class DependencyInjection
         services.Configure<RegistryOptions>(configuration.GetSection(RegistryOptions.SectionName));
         services.Configure<FxOptions>(configuration.GetSection(FxOptions.SectionName));
         services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));
+        services.Configure<AttachmentStorageOptions>(configuration.GetSection(AttachmentStorageOptions.SectionName));
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
         services.AddSingleton<IAdminAccess, AdminAccess>();
         services.AddSingleton<IJobSettingsStore, JobSettingsStore>();
@@ -158,6 +159,12 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0 (invoice-app; contact@fakturio.local)");
         });
+        services.AddHttpClient("fio", client =>
+        {
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+        });
+
         services.AddHttpClient("gleif", client =>
         {
             client.BaseAddress = new Uri(EnsureTrailingSlash(registry.GleifBaseUrl));
@@ -200,6 +207,10 @@ public static class DependencyInjection
         services.AddScoped<IInvoiceNumberService, InvoiceNumberService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoicePdfService, InvoicePdfService>();
+        services.AddScoped<IInvoiceIsdocService, InvoiceIsdocService>();
+        services.AddScoped<IInvoicePublicLinkService, InvoicePublicLinkService>();
+        services.AddScoped<IPublicInvoiceService, PublicInvoiceService>();
+        services.AddScoped<IInvoiceAttachmentService, InvoiceAttachmentService>();
         services.AddScoped<ICustomerService, CustomerService>();
         services.AddScoped<ISearchService, SearchService>();
 
@@ -212,6 +223,7 @@ public static class DependencyInjection
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();
         services.AddScoped<IExportService, CsvExportService>();
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
+        services.AddScoped<IFioBankService, FioBankService>();
         services.AddScoped<IPaymentImportService, PaymentImportService>();
         services.AddScoped<IResumeService, ResumeService>();
         services.AddScoped<INoteService, NoteService>();

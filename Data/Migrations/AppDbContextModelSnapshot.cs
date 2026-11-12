@@ -35,6 +35,10 @@ namespace Fakturio.Api.Data.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("FioBankToken")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("City")
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
@@ -364,6 +368,13 @@ namespace Fakturio.Api.Data.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("PublicLinkEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PublicAccessToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("RelatedInvoiceId")
                         .HasColumnType("TEXT");
 
@@ -454,6 +465,9 @@ namespace Fakturio.Api.Data.Migrations
 
                     b.HasIndex("IssueDate");
 
+                    b.HasIndex("PublicAccessToken")
+                        .IsUnique();
+
                     b.HasIndex("RelatedInvoiceId");
 
                     b.HasIndex("Status");
@@ -463,6 +477,48 @@ namespace Fakturio.Api.Data.Migrations
                     b.HasIndex("CompanyId", "Flow", "DocumentType");
 
                     b.ToTable("Invoices");
+                });
+
+            modelBuilder.Entity("Fakturio.Api.Models.InvoiceAttachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(260)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("InvoiceId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompanyId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.ToTable("InvoiceAttachments");
                 });
 
             modelBuilder.Entity("Fakturio.Api.Models.AuditLogEntry", b =>
@@ -1062,6 +1118,17 @@ namespace Fakturio.Api.Data.Migrations
                     b.Navigation("Invoice");
                 });
 
+            modelBuilder.Entity("Fakturio.Api.Models.InvoiceAttachment", b =>
+                {
+                    b.HasOne("Fakturio.Api.Models.Invoice", "Invoice")
+                        .WithMany("Attachments")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Invoice");
+                });
+
             modelBuilder.Entity("Fakturio.Api.Models.RecurringInvoice", b =>
                 {
                     b.HasOne("Fakturio.Api.Models.Customer", "Customer")
@@ -1091,6 +1158,8 @@ namespace Fakturio.Api.Data.Migrations
 
             modelBuilder.Entity("Fakturio.Api.Models.Invoice", b =>
                 {
+                    b.Navigation("Attachments");
+
                     b.Navigation("Items");
                 });
 

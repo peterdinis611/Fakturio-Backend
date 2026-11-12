@@ -67,8 +67,15 @@ public class Invoice : ICompanyOwned
     public decimal VatTotal { get; set; }
     public decimal Total { get; set; }
 
+    /// <summary>When true, <see cref="PublicAccessToken"/> unlocks the public invoice page.</summary>
+    public bool PublicLinkEnabled { get; set; }
+
+    /// <summary>Opaque token for unauthenticated access (URL segment).</summary>
+    public string? PublicAccessToken { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<InvoiceItem> Items { get; set; } = [];
+    public ICollection<InvoiceAttachment> Attachments { get; set; } = [];
 }

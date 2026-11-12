@@ -26,6 +26,7 @@ public static class CompanyMapper
         c.BankIban,
         c.BankBic,
         c.BankName,
+        !string.IsNullOrWhiteSpace(c.FioBankToken),
         c.DefaultDueDays,
         c.DefaultVatRate,
         c.DefaultCurrency,
@@ -167,7 +168,8 @@ public static class CompanyMapper
         c.BankBic,
         c.BankName,
         c.DefaultPaymentMethod,
-        c.DefaultConstantSymbol);
+        c.DefaultConstantSymbol,
+        !string.IsNullOrWhiteSpace(c.FioBankToken));
 
     public static void ApplyBank(CompanySettings company, UpdateCompanyBankRequest request)
     {
@@ -181,6 +183,10 @@ public static class CompanyMapper
             company.DefaultPaymentMethod = Normalize(request.DefaultPaymentMethod);
         if (request.DefaultConstantSymbol is not null)
             company.DefaultConstantSymbol = Normalize(request.DefaultConstantSymbol);
+        if (request.FioBankToken is not null)
+            company.FioBankToken = string.IsNullOrWhiteSpace(request.FioBankToken)
+                ? null
+                : request.FioBankToken.Trim();
         company.UpdatedAt = DateTime.UtcNow;
     }
 

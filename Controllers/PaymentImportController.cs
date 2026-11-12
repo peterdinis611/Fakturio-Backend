@@ -21,4 +21,13 @@ public sealed class PaymentImportController(IPaymentImportService import) : ApiC
         [FromBody] PaymentImportConfirmRequest request,
         CancellationToken ct)
         => (await import.ConfirmAsync(request, ct)).ToActionResult(this);
+
+    [HttpGet("fio/preview")]
+    [HttpPost("fio/preview")]
+    [ProducesResponseType(typeof(PaymentImportPreviewResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PaymentImportPreviewResponse>> PreviewFio(
+        [FromQuery] DateOnly from,
+        [FromQuery] DateOnly to,
+        CancellationToken ct)
+        => (await import.PreviewFioAsync(from, to, ct)).ToActionResult(this);
 }

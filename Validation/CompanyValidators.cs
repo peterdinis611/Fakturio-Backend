@@ -206,6 +206,8 @@ public class UpdateCompanyBankRequestValidator : AbstractValidator<UpdateCompany
             .Matches(@"^\d{1,4}$")
             .When(x => !string.IsNullOrWhiteSpace(x.DefaultConstantSymbol));
 
+        RuleFor(x => x.FioBankToken).MaximumLength(128);
+
         RuleFor(x => x)
             .Must(HasAtLeastOneField)
             .WithMessage("At least one bank field must be provided.");
@@ -216,7 +218,8 @@ public class UpdateCompanyBankRequestValidator : AbstractValidator<UpdateCompany
         || x.BankBic is not null
         || x.BankName is not null
         || x.DefaultPaymentMethod is not null
-        || x.DefaultConstantSymbol is not null;
+        || x.DefaultConstantSymbol is not null
+        || x.FioBankToken is not null;
 }
 
 public class UpdateCompanyBrandingRequestValidator : AbstractValidator<UpdateCompanyBrandingRequest>

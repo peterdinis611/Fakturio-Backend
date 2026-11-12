@@ -10,7 +10,9 @@ namespace Fakturio.Api.Controllers;
 [Route("api/invoices")]
 public sealed class InvoicesController(
     IInvoiceService invoices,
-    IInvoicePdfService pdfs) : ApiControllerBase
+    IInvoicePdfService pdfs,
+    IInvoiceIsdocService isdoc,
+    IInvoicePublicLinkService publicLinks) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<InvoiceListItemResponse>), StatusCodes.Status200OK)]
@@ -72,6 +74,25 @@ public sealed class InvoicesController(
     [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
     public async Task<ActionResult> DownloadPdf(Guid id, CancellationToken ct)
         => (await pdfs.GenerateAsync(id, ct)).ToFileResult(this);
+
+    [HttpGet("{id:guid}/isdoc")]
+    [Produces("application/xml")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<ActionResult> DownloadIsdoc(Guid id, CancellationToken ct)
+        => (await isdoc.GenerateIsdocAsync(id, ct)).ToFileResult(this);
+
+    [HttpGet("{id:guid}/public-link")]
+    [ProducesResponseType(typeof(PublicLinkResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PublicLinkResponse>> GetPublicLink(Guid id, CancellationToken ct)
+        => (await publicLinks.GetAsync(id, ct)).ToActionResult(this);
+
+    [HttpPut("{id:guid}/public-link")]
+    [ProducesResponseType(typeof(PublicLinkResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PublicLinkResponse>> SetPublicLink(
+        Guid id,
+        [FromBody] SetPublicLinkRequest request,
+        CancellationToken ct)
+        => (await publicLinks.SetAsync(id, request, ct)).ToActionResult(this);
 
     [HttpPost]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status201Created)]

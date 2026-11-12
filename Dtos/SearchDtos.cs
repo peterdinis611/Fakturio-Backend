@@ -8,7 +8,10 @@ public enum SearchEntityType
     None = 0,
     Customers = 1,
     Invoices = 2,
-    All = Customers | Invoices
+    Notes = 4,
+    Services = 8,
+    Payments = 16,
+    All = Customers | Invoices | Notes | Services | Payments
 }
 
 public record SearchRequest(

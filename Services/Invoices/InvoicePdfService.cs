@@ -22,6 +22,14 @@ public class InvoicePdfService(
         CancellationToken ct = default)
     {
         var companyId = await tenant.GetCompanyIdAsync(ct);
+        return await GenerateForCompanyAsync(invoiceId, companyId, ct);
+    }
+
+    public async Task<ServiceResult<InvoicePdfFile>> GenerateForCompanyAsync(
+        Guid invoiceId,
+        Guid companyId,
+        CancellationToken ct = default)
+    {
         var invoice = await db.Invoices
             .AsNoTracking()
             .Include(i => i.Items)

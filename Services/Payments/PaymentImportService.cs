@@ -15,7 +15,8 @@ public sealed class PaymentImportService(
     AppDbContext db,
     ITenantContext tenant,
     IInvoiceService invoices,
-    IAuditLogService audit) : IPaymentImportService
+    IAuditLogService audit,
+    IFioBankService fio) : IPaymentImportService
 {
     private static readonly string[] VsHeaders =
     [
@@ -67,110 +68,44 @@ public sealed class PaymentImportService(
         var dateIndex = FindColumn(parsed.Headers, DateHeaders);
         var partyIndex = FindColumn(parsed.Headers, CounterpartyHeaders);
         var noteIndex = FindColumn(parsed.Headers, NoteHeaders);
-        // Prefer dedicated note column over VS column when both map to "poznamka"
         if (noteIndex == vsIndex)
             noteIndex = -1;
 
-        var companyId = await tenant.GetCompanyIdAsync(ct);
-        var openInvoices = await db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
-            .Where(i =>
-                i.Status == InvoiceStatus.Issued ||
-                i.Status == InvoiceStatus.Overdue ||
-                i.Status == InvoiceStatus.Paid)
-            .Select(i => new
-            {
-                i.Id,
-                i.Number,
-                i.VariableSymbol,
-                i.Total,
-                i.Currency,
-                i.Status
-            })
-            .ToListAsync(ct);
-
-        var byVs = openInvoices
-            .Where(i => !string.IsNullOrWhiteSpace(i.VariableSymbol))
-            .GroupBy(i => DigitsOnly(i.VariableSymbol!))
-            .Where(g => g.Key.Length > 0)
-            .ToDictionary(g => g.Key, g => g.ToList());
-
-        var rows = new List<PaymentImportRowResult>();
-        var matched = 0;
-        var ambiguous = 0;
-        var unmatched = 0;
-        var alreadyPaid = 0;
-        var skipped = 0;
-
+        var sourceRows = new List<PaymentImportSourceRow>();
         for (var i = 0; i < parsed.Rows.Count; i++)
         {
-            var lineNumber = i + 2; // header is line 1
+            var lineNumber = i + 2;
             var cells = parsed.Rows[i];
-            var rawVs = GetCell(cells, vsIndex);
-            var normalized = DigitsOnly(rawVs ?? "");
-            var amount = ParseAmount(GetCell(cells, amountIndex));
-            var bookingDate = ParseDate(GetCell(cells, dateIndex));
-            var counterparty = GetCell(cells, partyIndex);
-            var note = GetCell(cells, noteIndex);
-
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                skipped++;
-                rows.Add(new PaymentImportRowResult(
-                    lineNumber, rawVs, null, amount, bookingDate, counterparty, note,
-                    "skipped", null, null, null, null,
-                    "Missing variable symbol."));
-                continue;
-            }
-
-            if (!byVs.TryGetValue(normalized, out var candidates) || candidates.Count == 0)
-            {
-                unmatched++;
-                rows.Add(new PaymentImportRowResult(
-                    lineNumber, rawVs, normalized, amount, bookingDate, counterparty, note,
-                    "unmatched", null, null, null, null,
-                    "No invoice with this VS."));
-                continue;
-            }
-
-            if (candidates.Count > 1)
-            {
-                ambiguous++;
-                rows.Add(new PaymentImportRowResult(
-                    lineNumber, rawVs, normalized, amount, bookingDate, counterparty, note,
-                    "ambiguous", null, null, null, null,
-                    $"Multiple invoices share VS {normalized}."));
-                continue;
-            }
-
-            var inv = candidates[0];
-            if (inv.Status == InvoiceStatus.Paid)
-            {
-                alreadyPaid++;
-                rows.Add(new PaymentImportRowResult(
-                    lineNumber, rawVs, normalized, amount, bookingDate, counterparty, note,
-                    "already_paid", inv.Id, inv.Number, inv.Total, inv.Currency,
-                    "Invoice is already paid."));
-                continue;
-            }
-
-            matched++;
-            var message = amount.HasValue && Math.Abs(amount.Value - inv.Total) > 0.05m
-                ? $"Amount differs (CSV {amount.Value:0.00} vs invoice {inv.Total:0.00})."
-                : null;
-
-            rows.Add(new PaymentImportRowResult(
-                lineNumber, rawVs, normalized, amount, bookingDate, counterparty, note,
-                "matched", inv.Id, inv.Number, inv.Total, inv.Currency, message));
+            sourceRows.Add(new PaymentImportSourceRow(
+                lineNumber,
+                GetCell(cells, vsIndex),
+                PaymentImportMatcher.ParseAmount(GetCell(cells, amountIndex)),
+                PaymentImportMatcher.ParseDate(GetCell(cells, dateIndex)),
+                GetCell(cells, partyIndex),
+                GetCell(cells, noteIndex)));
         }
 
-        return ServiceResult<PaymentImportPreviewResponse>.Ok(new PaymentImportPreviewResponse(
-            parsed.Rows.Count,
-            matched,
-            ambiguous,
-            unmatched,
-            alreadyPaid,
-            skipped,
-            rows));
+        return await PreviewFromRowsAsync(sourceRows, ct);
+    }
+
+    public async Task<ServiceResult<PaymentImportPreviewResponse>> PreviewFioAsync(
+        DateOnly from,
+        DateOnly to,
+        CancellationToken ct = default)
+    {
+        var fetch = await fio.FetchTransactionsAsync(from, to, ct);
+        if (!fetch.Success || fetch.Data is null)
+            return ServiceResult<PaymentImportPreviewResponse>.Fail(
+                fetch.Error!,
+                fetch.StatusCode,
+                fetch.ErrorCode);
+
+        if (fetch.Data.Count == 0)
+            return ServiceResult<PaymentImportPreviewResponse>.BadRequest(
+                "FIO period contains no transactions.",
+                ErrorCodes.BadRequest);
+
+        return await PreviewFromRowsAsync(fetch.Data, ct);
     }
 
     public async Task<ServiceResult<PaymentImportConfirmResponse>> ConfirmAsync(
@@ -230,6 +165,15 @@ public sealed class PaymentImportService(
             new PaymentImportConfirmResponse(marked, failed, results));
     }
 
+    private async Task<ServiceResult<PaymentImportPreviewResponse>> PreviewFromRowsAsync(
+        IReadOnlyList<PaymentImportSourceRow> sourceRows,
+        CancellationToken ct)
+    {
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var preview = await PaymentImportMatcher.MatchAsync(db, companyId, sourceRows, ct);
+        return ServiceResult<PaymentImportPreviewResponse>.Ok(preview);
+    }
+
     private static int FindColumn(IReadOnlyList<string> headers, string[] aliases)
     {
         for (var i = 0; i < headers.Count; i++)
@@ -258,58 +202,6 @@ public sealed class PaymentImportService(
 
     private static string? NullIfEmpty(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    private static string DigitsOnly(string value) =>
-        new(value.Where(char.IsDigit).ToArray());
-
-    private static decimal? ParseAmount(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-
-        var cleaned = raw.Trim()
-            .Replace("€", "", StringComparison.Ordinal)
-            .Replace("EUR", "", StringComparison.OrdinalIgnoreCase)
-            .Replace(" ", "")
-            .Replace("\u00a0", "");
-
-        // SK/CZ often use 1.234,56
-        if (cleaned.Contains(',') && cleaned.Contains('.'))
-            cleaned = cleaned.Replace(".", "").Replace(',', '.');
-        else if (cleaned.Contains(','))
-            cleaned = cleaned.Replace(',', '.');
-
-        return decimal.TryParse(
-            cleaned,
-            NumberStyles.Number,
-            CultureInfo.InvariantCulture,
-            out var amount)
-            ? amount
-            : null;
-    }
-
-    private static string? ParseDate(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return null;
-
-        var formats = new[]
-        {
-            "d.M.yyyy", "dd.MM.yyyy", "yyyy-MM-dd", "d/M/yyyy", "dd/MM/yyyy", "d.M.yy"
-        };
-
-        if (DateOnly.TryParseExact(
-                raw.Trim(),
-                formats,
-                CultureInfo.InvariantCulture,
-                DateTimeStyles.None,
-                out var date))
-            return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-
-        return DateOnly.TryParse(raw.Trim(), CultureInfo.GetCultureInfo("sk-SK"), DateTimeStyles.None, out date)
-            ? date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
-            : null;
-    }
 }
 
 internal static class BankCsvParser

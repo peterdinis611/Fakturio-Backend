@@ -1,3 +1,4 @@
+using System.Globalization;
 using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Dtos;
@@ -96,6 +97,91 @@ public class SearchService(AppDbContext db, ITenantContext tenant) : ISearchServ
                 i.Currency,
                 i.IssueDate,
                 ScoreInvoice(i, term))));
+        }
+
+        if (types.HasFlag(SearchEntityType.Notes))
+        {
+            var companyId = await tenant.GetCompanyIdAsync(ct);
+            var notes = await db.Notes.AsNoTracking().Where(n => n.CompanyId == companyId)
+                .Where(n =>
+                    n.Title.Contains(term) ||
+                    n.Body.Contains(term))
+                .OrderByDescending(n => n.IsPinned)
+                .ThenByDescending(n => n.UpdatedAt)
+                .Take(limit)
+                .ToListAsync(ct);
+
+            hits.AddRange(notes.Select(n => new SearchHitResponse(
+                "note",
+                n.Id,
+                n.Title,
+                $"/notes/{n.Id:N}",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                ScoreNote(n, term))));
+        }
+
+        if (types.HasFlag(SearchEntityType.Services))
+        {
+            var companyId = await tenant.GetCompanyIdAsync(ct);
+            var services = await db.ServiceCatalogItems.AsNoTracking().Where(s => s.CompanyId == companyId)
+                .Where(s => s.Description.Contains(term))
+                .OrderBy(s => s.SortOrder)
+                .ThenBy(s => s.Description)
+                .Take(limit)
+                .ToListAsync(ct);
+
+            hits.AddRange(services.Select(s => new SearchHitResponse(
+                "service",
+                s.Id,
+                s.Description,
+                $"{s.UnitPrice:0.00} {s.Unit} · DPH {s.VatRate:0.#}%",
+                null,
+                null,
+                null,
+                null,
+                s.UnitPrice,
+                null,
+                null,
+                ScoreService(s, term))));
+        }
+
+        if (types.HasFlag(SearchEntityType.Payments))
+        {
+            var companyId = await tenant.GetCompanyIdAsync(ct);
+            var totalMatch = TryParseTotalSearch(term, out var totalValue);
+
+            var payments = await db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
+                .Where(i => i.Status == InvoiceStatus.Paid)
+                .Where(i =>
+                    i.Number.Contains(term) ||
+                    i.CustomerName.Contains(term) ||
+                    (i.VariableSymbol != null && i.VariableSymbol.Contains(term)) ||
+                    (i.BankIban != null && i.BankIban.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                    (totalMatch && i.Total == totalValue))
+                .OrderByDescending(i => i.PaidAt ?? i.IssueDate)
+                .ThenByDescending(i => i.CreatedAt)
+                .Take(limit)
+                .ToListAsync(ct);
+
+            hits.AddRange(payments.Select(i => new SearchHitResponse(
+                "payment",
+                i.Id,
+                i.Number,
+                $"{i.CustomerName} · {i.Total:0.00} {i.Currency}",
+                i.Number,
+                i.CustomerEmail,
+                i.CustomerIco,
+                i.Status,
+                i.Total,
+                i.Currency,
+                i.PaidAt ?? i.IssueDate,
+                ScorePayment(i, term, totalValue, totalMatch))));
         }
 
         var ordered = hits
@@ -229,5 +315,55 @@ public class SearchService(AppDbContext db, ITenantContext tenant) : ISearchServ
         if (i.CustomerName.Contains(term, StringComparison.OrdinalIgnoreCase)) score += 40;
         if (i.CustomerIco?.Contains(t, StringComparison.OrdinalIgnoreCase) == true) score += 50;
         return score;
+    }
+
+    private static double ScoreNote(Note n, string term)
+    {
+        double score = 0;
+        if (n.Title.Equals(term, StringComparison.OrdinalIgnoreCase)) score += 100;
+        else if (n.Title.StartsWith(term, StringComparison.OrdinalIgnoreCase)) score += 70;
+        else if (n.Title.Contains(term, StringComparison.OrdinalIgnoreCase)) score += 45;
+        if (n.Body.Contains(term, StringComparison.OrdinalIgnoreCase)) score += 25;
+        if (n.IsPinned) score += 5;
+        return score;
+    }
+
+    private static double ScoreService(ServiceCatalogItem s, string term)
+    {
+        double score = 0;
+        if (s.Description.Equals(term, StringComparison.OrdinalIgnoreCase)) score += 100;
+        else if (s.Description.StartsWith(term, StringComparison.OrdinalIgnoreCase)) score += 70;
+        else if (s.Description.Contains(term, StringComparison.OrdinalIgnoreCase)) score += 40;
+        if (!s.IsActive) score -= 10;
+        return score;
+    }
+
+    private static double ScorePayment(Invoice i, string term, decimal totalValue, bool totalMatch)
+    {
+        var score = ScoreInvoice(i, term);
+        if (totalMatch && i.Total == totalValue) score += 90;
+        if (i.BankIban?.Contains(term, StringComparison.OrdinalIgnoreCase) == true) score += 35;
+        return score;
+    }
+
+    private static bool TryParseTotalSearch(string term, out decimal value)
+    {
+        value = 0;
+        var cleaned = term.Trim()
+            .Replace("€", "", StringComparison.Ordinal)
+            .Replace("EUR", "", StringComparison.OrdinalIgnoreCase)
+            .Replace(" ", "")
+            .Replace("\u00a0", "");
+
+        if (cleaned.Contains(',') && cleaned.Contains('.'))
+            cleaned = cleaned.Replace(".", "").Replace(',', '.');
+        else if (cleaned.Contains(','))
+            cleaned = cleaned.Replace(',', '.');
+
+        return decimal.TryParse(
+            cleaned,
+            NumberStyles.Number,
+            CultureInfo.InvariantCulture,
+            out value);
     }
 }

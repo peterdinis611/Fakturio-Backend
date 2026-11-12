@@ -35,6 +35,9 @@ public class CompanySettings
     public string? BankBic { get; set; }
     public string? BankName { get; set; }
 
+    /// <summary>FIO Banka API token (from internet banking). Null = CSV-only import.</summary>
+    public string? FioBankToken { get; set; }
+
     // Invoice defaults
     public int DefaultDueDays { get; set; } = 14;
     public decimal DefaultVatRate { get; set; } = 23m;

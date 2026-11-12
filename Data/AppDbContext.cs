@@ -8,6 +8,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<InvoiceItem> InvoiceItems => Set<InvoiceItem>();
+    public DbSet<InvoiceAttachment> InvoiceAttachments => Set<InvoiceAttachment>();
     public DbSet<CompanySettings> CompanySettings => Set<CompanySettings>();
     public DbSet<ServiceCatalogItem> ServiceCatalogItems => Set<ServiceCatalogItem>();
     public DbSet<ResumeProfile> ResumeProfiles => Set<ResumeProfile>();
@@ -68,6 +69,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(c => c.BankIban).HasMaxLength(34);
             entity.Property(c => c.BankBic).HasMaxLength(11);
             entity.Property(c => c.BankName).HasMaxLength(100);
+            entity.Property(c => c.FioBankToken).HasMaxLength(128);
             entity.Property(c => c.DefaultVatRate).HasPrecision(5, 2);
             entity.Property(c => c.DefaultCurrency).HasMaxLength(3).HasDefaultValue("EUR");
             entity.Property(c => c.InvoicePrefix).HasMaxLength(20);
@@ -129,6 +131,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(i => i.BankBic).HasMaxLength(11);
             entity.Property(i => i.Notes).HasMaxLength(2000);
             entity.Property(i => i.CancelReason).HasMaxLength(500);
+            entity.Property(i => i.PublicAccessToken).HasMaxLength(64);
+            entity.HasIndex(i => i.PublicAccessToken).IsUnique();
             entity.Property(i => i.Subtotal).HasPrecision(18, 2);
             entity.Property(i => i.VatTotal).HasPrecision(18, 2);
             entity.Property(i => i.Total).HasPrecision(18, 2);
@@ -140,6 +144,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
                 .WithMany(c => c.Invoices)
                 .HasForeignKey(i => i.CustomerId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<InvoiceAttachment>(entity =>
+        {
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.CompanyId).IsRequired();
+            entity.HasIndex(a => a.CompanyId);
+            entity.HasIndex(a => a.InvoiceId);
+            entity.Property(a => a.FileName).HasMaxLength(260).IsRequired();
+            entity.Property(a => a.ContentType).HasMaxLength(120).IsRequired();
+            entity.Property(a => a.StoragePath).HasMaxLength(500).IsRequired();
+            entity.HasOne(a => a.Invoice)
+                .WithMany(i => i.Attachments)
+                .HasForeignKey(a => a.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<InvoiceItem>(entity =>

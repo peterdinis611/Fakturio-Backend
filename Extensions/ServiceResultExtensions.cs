@@ -58,6 +58,19 @@ public static class ServiceResultExtensions
     }
 
     public static ActionResult ToFileResult(
+        this ServiceResult<InvoiceIsdocFile> result,
+        ControllerBase controller)
+    {
+        if (!result.Success || result.Data is null)
+            return Problem(controller, result.StatusCode, result.Error, result.ErrorCode);
+
+        return controller.File(
+            result.Data.Content,
+            result.Data.ContentType,
+            result.Data.FileName);
+    }
+
+    public static ActionResult ToFileResult(
         this ServiceResult<ExportFile> result,
         ControllerBase controller)
     {

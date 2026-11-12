@@ -9,6 +9,11 @@ public interface IPaymentImportService
         PaymentImportPreviewRequest request,
         CancellationToken ct = default);
 
+    Task<ServiceResult<PaymentImportPreviewResponse>> PreviewFioAsync(
+        DateOnly from,
+        DateOnly to,
+        CancellationToken ct = default);
+
     Task<ServiceResult<PaymentImportConfirmResponse>> ConfirmAsync(
         PaymentImportConfirmRequest request,
         CancellationToken ct = default);
