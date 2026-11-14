@@ -36,7 +36,7 @@ namespace Fakturio.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("FioBankToken")
-                        .HasMaxLength(128)
+                        .HasMaxLength(1024)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("City")
@@ -970,6 +970,10 @@ namespace Fakturio.Api.Data.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("SecurityStamp")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("UpdatedAt")

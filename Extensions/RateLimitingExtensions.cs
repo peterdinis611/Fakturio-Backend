@@ -89,17 +89,10 @@ public static class RateLimitingExtensions
         return services;
     }
 
-    private static string GetClientKey(HttpContext httpContext)
-    {
-        var forwarded = httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(forwarded))
-        {
-            var first = forwarded.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(first))
-                return first;
-        }
-
-        return httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-    }
+    /// <summary>
+    /// Uses RemoteIpAddress only — after UseForwardedHeaders has applied trusted proxies.
+    /// Never read raw X-Forwarded-For (spoofable when the API is exposed directly).
+    /// </summary>
+    private static string GetClientKey(HttpContext httpContext) =>
+        httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 }

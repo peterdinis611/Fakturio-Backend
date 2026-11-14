@@ -1,5 +1,6 @@
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Models;
+using Fakturio.Api.Services.Notes;
 
 namespace Fakturio.Api.Mapping;
 
@@ -18,7 +19,7 @@ public static class NoteMapper
         new()
         {
             Title = request.Title.Trim(),
-            Body = string.IsNullOrWhiteSpace(request.Body) ? string.Empty : request.Body.Trim(),
+            Body = NoteHtmlSanitizer.Sanitize(request.Body),
             IsPinned = request.IsPinned ?? false,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -29,7 +30,7 @@ public static class NoteMapper
         if (request.Title is not null)
             note.Title = request.Title.Trim();
         if (request.Body is not null)
-            note.Body = request.Body.Trim();
+            note.Body = NoteHtmlSanitizer.Sanitize(request.Body);
         if (request.IsPinned.HasValue)
             note.IsPinned = request.IsPinned.Value;
         note.UpdatedAt = DateTime.UtcNow;

@@ -69,7 +69,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(c => c.BankIban).HasMaxLength(34);
             entity.Property(c => c.BankBic).HasMaxLength(11);
             entity.Property(c => c.BankName).HasMaxLength(100);
-            entity.Property(c => c.FioBankToken).HasMaxLength(128);
+            entity.Property(c => c.FioBankToken).HasMaxLength(1024);
             entity.Property(c => c.DefaultVatRate).HasPrecision(5, 2);
             entity.Property(c => c.DefaultCurrency).HasMaxLength(3).HasDefaultValue("EUR");
             entity.Property(c => c.InvoicePrefix).HasMaxLength(20);
@@ -221,6 +221,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasKey(u => u.Id);
             entity.Property(u => u.Email).HasMaxLength(200).IsRequired();
             entity.Property(u => u.PasswordHash).HasMaxLength(500).IsRequired();
+            entity.Property(u => u.SecurityStamp).IsRequired();
             entity.Property(u => u.FirstName).HasMaxLength(100);
             entity.Property(u => u.LastName).HasMaxLength(100);
             entity.Property(u => u.ImageUrl).HasMaxLength(500);

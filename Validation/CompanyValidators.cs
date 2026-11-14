@@ -206,7 +206,7 @@ public class UpdateCompanyBankRequestValidator : AbstractValidator<UpdateCompany
             .Matches(@"^\d{1,4}$")
             .When(x => !string.IsNullOrWhiteSpace(x.DefaultConstantSymbol));
 
-        RuleFor(x => x.FioBankToken).MaximumLength(128);
+        RuleFor(x => x.FioBankToken).MaximumLength(256);
 
         RuleFor(x => x)
             .Must(HasAtLeastOneField)

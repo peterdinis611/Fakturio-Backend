@@ -5,6 +5,8 @@ public class AppUser
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
+    /// <summary>Rotated on password change — must match JWT <c>sst</c> claim.</summary>
+    public Guid SecurityStamp { get; set; } = Guid.NewGuid();
     public string? FirstName { get; set; }
     public string? LastName { get; set; }
     public string? ImageUrl { get; set; }

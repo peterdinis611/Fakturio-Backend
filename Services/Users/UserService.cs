@@ -131,6 +131,7 @@ public sealed class UserService(
             return ServiceResult.Unauthorized("Neplatné aktuálne heslo.", ErrorCodes.Unauthorized);
 
         user.PasswordHash = passwordHasher.HashPassword(user, request.NewPassword);
+        user.SecurityStamp = Guid.NewGuid();
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok(StatusCodes.Status204NoContent);
@@ -151,6 +152,7 @@ public sealed class UserService(
                 "Posledného používateľa nie je možné zmazať.",
                 ErrorCodes.Conflict);
 
+        user.SecurityStamp = Guid.NewGuid();
         db.Users.Remove(user);
         await db.SaveChangesAsync(ct);
         return ServiceResult.Ok(StatusCodes.Status204NoContent);

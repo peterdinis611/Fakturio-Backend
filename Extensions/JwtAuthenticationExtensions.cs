@@ -1,8 +1,12 @@
+using System.Security.Claims;
 using System.Text;
 using Fakturio.Api.Authorization;
 using Fakturio.Api.Configuration;
+using Fakturio.Api.Data;
+using Fakturio.Api.Services.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Fakturio.Api.Extensions;
@@ -37,11 +41,10 @@ public static class JwtAuthenticationExtensions
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
                     ValidateLifetime = true,
                     ClockSkew = TimeSpan.FromMinutes(1),
-                    NameClaimType = System.Security.Claims.ClaimTypes.NameIdentifier,
-                    RoleClaimType = System.Security.Claims.ClaimTypes.Role,
+                    NameClaimType = ClaimTypes.NameIdentifier,
+                    RoleClaimType = ClaimTypes.Role,
                 };
 
-                // SignalR (browser WebSocket) sends JWT as ?access_token=
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
@@ -55,6 +58,30 @@ public static class JwtAuthenticationExtensions
                         }
 
                         return Task.CompletedTask;
+                    },
+                    OnTokenValidated = async context =>
+                    {
+                        var stampClaim = context.Principal?.FindFirst(JwtTokenService.SecurityStampClaimType)?.Value;
+                        var userIdRaw = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
+                            ?? context.Principal?.FindFirstValue("sub");
+
+                        if (string.IsNullOrWhiteSpace(stampClaim)
+                            || !Guid.TryParse(userIdRaw, out var userId)
+                            || (!Guid.TryParseExact(stampClaim, "N", out var stamp)
+                                && !Guid.TryParse(stampClaim, out stamp)))
+                        {
+                            context.Fail("Missing security stamp.");
+                            return;
+                        }
+
+                        var db = context.HttpContext.RequestServices.GetRequiredService<AppDbContext>();
+                        var current = await db.Users.AsNoTracking()
+                            .Where(u => u.Id == userId)
+                            .Select(u => (Guid?)u.SecurityStamp)
+                            .FirstOrDefaultAsync(context.HttpContext.RequestAborted);
+
+                        if (current is null || current.Value != stamp)
+                            context.Fail("Security stamp mismatch.");
                     },
                 };
             });

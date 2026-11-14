@@ -13,6 +13,8 @@ public sealed class JwtTokenService(
     IOptions<JwtOptions> options,
     IAdminAccess adminAccess)
 {
+    public const string SecurityStampClaimType = "sst";
+
     public (string Token, DateTime ExpiresAt) CreateToken(AppUser user)
     {
         var opts = options.Value;
@@ -31,6 +33,7 @@ public sealed class JwtTokenService(
             new(JwtRegisteredClaimNames.Email, user.Email),
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new(ClaimTypes.Email, user.Email),
+            new(SecurityStampClaimType, user.SecurityStamp.ToString("N")),
         };
 
         if (!string.IsNullOrWhiteSpace(display))

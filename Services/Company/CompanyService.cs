@@ -6,6 +6,7 @@ using Fakturio.Api.Interfaces;
 using Fakturio.Api.Mapping;
 using Fakturio.Api.Models;
 using Fakturio.Api.Services.Common;
+using Fakturio.Api.Services.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Company;
@@ -15,7 +16,8 @@ public class CompanyService(
     ICacheInvalidator cache,
     ILogoStorageService logos,
     ITenantContext tenant,
-    IAuditLogService audit) : ICompanyService
+    IAuditLogService audit,
+    IFioTokenProtector fioTokens) : ICompanyService
 {
     public async Task<CompanySettingsResponse> GetAsync(CancellationToken ct = default)
     {
@@ -79,6 +81,13 @@ public class CompanyService(
     {
         var company = await GetOrCreateAsync(ct);
         CompanyMapper.ApplyBank(company, request);
+        if (request.FioBankToken is not null)
+        {
+            company.FioBankToken = string.IsNullOrWhiteSpace(request.FioBankToken)
+                ? null
+                : fioTokens.Protect(request.FioBankToken);
+        }
+
         await SaveAndInvalidateAsync(ct);
         await WriteCompanyUpdatedAsync(company, "bank", ct);
         return ServiceResult<CompanySettingsResponse>.Ok(CompanyMapper.ToResponse(company));

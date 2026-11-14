@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text.Json.Serialization;
+using Fakturio.Api.Configuration;
 using Fakturio.Api.Data;
 using Fakturio.Api.Extensions;
 using Fakturio.Api.Hubs;
@@ -7,6 +9,7 @@ using Fakturio.Api.Middleware;
 using Fakturio.Api.Services;
 using Fakturio.Api.Validation;
 using FluentValidation;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -28,13 +31,29 @@ try
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.AddFakturioSerilog();
 
+    var forwarded = builder.Configuration.GetSection(ForwardedHeadersConfig.SectionName)
+        .Get<ForwardedHeadersConfig>() ?? new ForwardedHeadersConfig();
     builder.Services.Configure<ForwardedHeadersOptions>(options =>
     {
         options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-        // Reverse proxies (Docker / nginx / Cloudflare) terminate TLS in front of the container.
         options.KnownIPNetworks.Clear();
         options.KnownProxies.Clear();
+        if (forwarded.TrustAllProxies)
+            return;
+
+        foreach (var raw in forwarded.KnownProxies ?? [])
+        {
+            if (IPAddress.TryParse(raw, out var ip))
+                options.KnownProxies.Add(ip);
+        }
     });
+
+    var dpKeysPath = builder.Configuration["DataProtection:KeysPath"]
+        ?? Path.Combine(builder.Environment.ContentRootPath, "dp-keys");
+    Directory.CreateDirectory(dpKeysPath);
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo(dpKeysPath))
+        .SetApplicationName("Fakturio.Api");
 
     builder.Services.AddControllers(options =>
     {

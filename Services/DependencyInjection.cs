@@ -30,6 +30,7 @@ using Fakturio.Api.Services.Tenancy;
 using Fakturio.Api.Services.Users;
 using Fakturio.Api.Services.Gdpr;
 using Fakturio.Api.Services.Recurring;
+using Fakturio.Api.Services.Security;
 
 namespace Fakturio.Api.Services;
 
@@ -39,6 +40,7 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        services.AddSingleton<IFioTokenProtector, FioTokenProtector>();
         services.Configure<OverdueSyncOptions>(configuration.GetSection(OverdueSyncOptions.SectionName));
         services.Configure<ReminderJobOptions>(configuration.GetSection(ReminderJobOptions.SectionName));
         services.Configure<RecurringJobOptions>(configuration.GetSection(RecurringJobOptions.SectionName));

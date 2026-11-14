@@ -4,6 +4,7 @@ using Fakturio.Api.Common;
 using Fakturio.Api.Data;
 using Fakturio.Api.Interfaces;
 using Fakturio.Api.Services.Common;
+using Fakturio.Api.Services.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Payments;
@@ -12,6 +13,7 @@ public sealed class FioBankService(
     AppDbContext db,
     ITenantContext tenant,
     IHttpClientFactory httpClientFactory,
+    IFioTokenProtector fioTokens,
     ILogger<FioBankService> logger) : IFioBankService
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -35,7 +37,23 @@ public sealed class FioBankService(
                 "FIO bank token is not configured. Set it in company bank settings.",
                 ErrorCodes.BadRequest);
 
-        var token = company.FioBankToken.Trim();
+        var token = fioTokens.Unprotect(company.FioBankToken);
+        if (string.IsNullOrWhiteSpace(token))
+            return ServiceResult<IReadOnlyList<PaymentImportSourceRow>>.BadRequest(
+                "FIO bank token could not be decrypted. Re-save it in company bank settings.",
+                ErrorCodes.BadRequest);
+
+        // Lazy-migrate plaintext tokens written before DataProtection.
+        if (!fioTokens.LooksProtected(company.FioBankToken))
+        {
+            var tracked = await db.CompanySettings.FirstOrDefaultAsync(c => c.Id == companyId, ct);
+            if (tracked is not null)
+            {
+                tracked.FioBankToken = fioTokens.Protect(token);
+                tracked.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync(ct);
+            }
+        }
         var fromStr = from.ToString("yyyy-MM-dd", Inv);
         var toStr = to.ToString("yyyy-MM-dd", Inv);
         var url = $"https://fioapi.fio.cz/v1/rest/periods/{token}/{fromStr}/{toStr}/transactions.json";

@@ -35,7 +35,7 @@ public class CompanySettings
     public string? BankBic { get; set; }
     public string? BankName { get; set; }
 
-    /// <summary>FIO Banka API token (from internet banking). Null = CSV-only import.</summary>
+    /// <summary>FIO Banka API token (DataProtection-encrypted at rest). Null = CSV-only import.</summary>
     public string? FioBankToken { get; set; }
 
     // Invoice defaults

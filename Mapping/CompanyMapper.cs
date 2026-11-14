@@ -183,10 +183,10 @@ public static class CompanyMapper
             company.DefaultPaymentMethod = Normalize(request.DefaultPaymentMethod);
         if (request.DefaultConstantSymbol is not null)
             company.DefaultConstantSymbol = Normalize(request.DefaultConstantSymbol);
-        if (request.FioBankToken is not null)
-            company.FioBankToken = string.IsNullOrWhiteSpace(request.FioBankToken)
-                ? null
-                : request.FioBankToken.Trim();
+        // FioBankToken encryption is applied in CompanyService (needs IFioTokenProtector).
+        if (request.FioBankToken is not null
+            && string.IsNullOrWhiteSpace(request.FioBankToken))
+            company.FioBankToken = null;
         company.UpdatedAt = DateTime.UtcNow;
     }
 
