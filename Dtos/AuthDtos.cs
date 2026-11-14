@@ -4,7 +4,8 @@ public record RegisterRequest(
     string Email,
     string Password,
     string? FirstName,
-    string? LastName
+    string? LastName,
+    string? TurnstileToken = null
 );
 
 public record LoginRequest(
@@ -16,6 +17,11 @@ public record AuthResponse(
     string AccessToken,
     DateTime ExpiresAt,
     UserResponse User
+);
+
+public record HubTokenResponse(
+    string AccessToken,
+    DateTime ExpiresAt
 );
 
 public record UserResponse(

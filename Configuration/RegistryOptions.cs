@@ -32,6 +32,16 @@ public sealed class RegistryOptions
     /// <summary>OSM Nominatim — address normalize (rate-limited).</summary>
     public string NominatimBaseUrl { get; set; } = "https://nominatim.openstreetmap.org/";
 
+    /// <summary>ČÚZK RÚIAN — Czech address geocode (ArcGIS).</summary>
+    public string RuianBaseUrl { get; set; } =
+        "https://ags.cuzk.gov.cz/arcgis/rest/services/RUIAN/Vyhledavaci_sluzba_nad_daty_RUIAN/MapServer/exts/GeocodeSOE/";
+
+    /// <summary>OpenSanctions public search (no key).</summary>
+    public string OpenSanctionsBaseUrl { get; set; } = "https://api.opensanctions.org/";
+
+    /// <summary>REST Countries (no key).</summary>
+    public string RestCountriesBaseUrl { get; set; } = "https://restcountries.com/v3.1/";
+
     /// <summary>MF ČR ADISREG — nespolehlivý plátce DPH + účty (SOAP).</summary>
     public string AdisregBaseUrl { get; set; } =
         "https://adisrws.mfcr.cz/dpr/axis2/services/rozhraniCRPDPH.rozhraniCRPDPHSOAP";

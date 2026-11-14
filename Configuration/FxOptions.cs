@@ -13,6 +13,10 @@ public sealed class FxOptions
     /// <summary>NBS / ECB daily FX list (CSV) — foreign currency per 1 EUR.</summary>
     public string NbsBaseUrl { get; set; } = "https://nbs.sk/export/sk/exchange-rate/";
 
+    /// <summary>ECB daily reference XML — EUR base fallback after NBS.</summary>
+    public string EcbDailyFxUrl { get; set; } =
+        "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+
     public int TimeoutSeconds { get; set; } = 10;
 
     public int CacheSeconds { get; set; } = 3600;

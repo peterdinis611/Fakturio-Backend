@@ -59,6 +59,56 @@ public sealed class IbanLookupService(
         ["9952"] = ("Home Credit", null),
     };
 
+    /// <summary>Common CZ bank codes (ČNB).</summary>
+    private static readonly Dictionary<string, (string Name, string? Bic)> CzBanks = new(StringComparer.Ordinal)
+    {
+        ["0100"] = ("Komerční banka", "KOMBCZPP"),
+        ["0300"] = ("ČSOB", "CEKOCZPP"),
+        ["0600"] = ("MONETA Money Bank", "AGBACZPP"),
+        ["0710"] = ("Česká národní banka", "CNBACZPP"),
+        ["0800"] = ("Česká spořitelna", "GIBACZPX"),
+        ["2010"] = ("Fio banka", "FIOBCZPP"),
+        ["2060"] = ("Citfin", "CITFCZPP"),
+        ["2070"] = ("TRINITY BANK", "MPUBCZPP"),
+        ["2100"] = ("UniCredit Bank", "BACXCZPP"),
+        ["2200"] = ("Peněžní dům", null),
+        ["2220"] = ("Artesa", "ARTTCZPP"),
+        ["2240"] = ("Poštová banka", "POBNCZPP"),
+        ["2250"] = ("Banka CREDITAS", "CTASCZ22"),
+        ["2260"] = ("NEY spořitelní družstvo", null),
+        ["2310"] = ("ZUNO BANK", "ZUNOCZPP"),
+        ["2600"] = ("Citibank Europe", "CITICZPX"),
+        ["2700"] = ("UniCredit Bank", "BACXCZPP"),
+        ["3030"] = ("Air Bank", "AIRACZPP"),
+        ["3050"] = ("BNP Paribas Personal Finance", "BPPFCZP1"),
+        ["3060"] = ("PKO BP", null),
+        ["3500"] = ("ING Bank", "INGBCZPP"),
+        ["4000"] = ("Expobank CZ", "EXPNCZPP"),
+        ["4300"] = ("Českomoravská záruční a rozvojová banka", "CMZRCZP1"),
+        ["5500"] = ("Raiffeisenbank", "RZBCCZPP"),
+        ["5800"] = ("J&T BANKA", "JTBPCZPP"),
+        ["6000"] = ("PPF banka", "PMBPCZPP"),
+        ["6100"] = ("Equa bank", "EQBKCZPP"),
+        ["6200"] = ("COMMERZBANK Aktiengesellschaft", "COBACZPX"),
+        ["6210"] = ("mBank", "BREXCZPP"),
+        ["6300"] = ("BNP Paribas", "GEBACZPP"),
+        ["6700"] = ("Všeobecná úverová banka", null),
+        ["6800"] = ("Sberbank CZ", "VBOECZ2X"),
+        ["7910"] = ("Deutsche Bank", "DEUTCZPX"),
+        ["7940"] = ("Waldviertler Sparkasse Bank", null),
+        ["7950"] = ("Raiffeisen stavební spořitelna", null),
+        ["7960"] = ("Českomoravská stavební spořitelna", null),
+        ["7970"] = ("Wüstenrot hypoteční banka", null),
+        ["7980"] = ("Wüstenrot stavební spořitelna", null),
+        ["7990"] = ("Modrá pyramida stavební spořitelna", null),
+        ["8030"] = ("Volksbank Raiffeisenbank Nordoberpfalz", null),
+        ["8040"] = ("Oberbank AG", "OBKLCZ2X"),
+        ["8060"] = ("Stavební spořitelna České spořitelny", null),
+        ["8090"] = ("Česká exportní banka", "CZEECZPP"),
+        ["8150"] = ("HSBC Bank", "MIDLCZPP"),
+        ["8200"] = ("PRIVAT BANK", "PRIBCZPP"),
+    };
+
     public async Task<ServiceResult<IbanLookupResponse>> LookupAsync(
         string iban,
         CancellationToken ct = default)
@@ -84,13 +134,18 @@ public sealed class IbanLookupService(
         string? city = null;
         var source = "local";
 
-        if (country == "SK" && normalized.Length >= 8)
+        if (normalized.Length >= 8)
         {
             bankCode = normalized.Substring(4, 4);
-            if (SkBanks.TryGetValue(bankCode, out var sk))
+            if (country == "SK" && SkBanks.TryGetValue(bankCode, out var sk))
             {
                 bankName = sk.Name;
                 bic = sk.Bic;
+            }
+            else if (country == "CZ" && CzBanks.TryGetValue(bankCode, out var cz))
+            {
+                bankName = cz.Name;
+                bic = cz.Bic;
             }
         }
 

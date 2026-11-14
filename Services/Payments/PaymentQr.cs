@@ -4,6 +4,8 @@ public enum PaymentQrKind
 {
     None,
     Epc,
+    Spayd,
+    PayBySquare,
 }
 
 public sealed record PaymentQrResult(PaymentQrKind Kind, byte[] Png, string Label);
@@ -25,16 +27,44 @@ public static class PaymentQr
         string? specificSymbol = null,
         string? paymentNote = null)
     {
-        _ = dueDate;
-        _ = constantSymbol;
-        _ = specificSymbol;
-        _ = paymentNote;
-
         if (amount <= 0 || string.IsNullOrWhiteSpace(iban))
             return null;
 
         var cleanIban = new string(iban.Where(char.IsLetterOrDigit).ToArray()).ToUpperInvariant();
         var isSk = cleanIban.StartsWith("SK", StringComparison.Ordinal);
+        var isCz = cleanIban.StartsWith("CZ", StringComparison.Ordinal);
+
+        if (isSk)
+        {
+            var pbs = PayBySquareEncoder.TryBuildPayload(
+                cleanIban,
+                beneficiaryName,
+                amount,
+                currency,
+                variableSymbol,
+                dueDate,
+                paymentNote);
+            var pbsPng = EpcQrImage.TryCreatePng(pbs, pixelsPerModule: 5);
+            if (pbsPng is { Length: > 0 })
+                return new PaymentQrResult(PaymentQrKind.PayBySquare, pbsPng, "QR Platba");
+        }
+
+        if (isCz)
+        {
+            var spayd = SpaydQrPayload.TryBuild(
+                cleanIban,
+                beneficiaryName,
+                amount,
+                currency,
+                variableSymbol,
+                constantSymbol,
+                specificSymbol,
+                dueDate,
+                paymentNote);
+            var spaydPng = EpcQrImage.TryCreatePng(spayd, pixelsPerModule: 5);
+            if (spaydPng is { Length: > 0 })
+                return new PaymentQrResult(PaymentQrKind.Spayd, spaydPng, "QR Platba (SPD)");
+        }
 
         var epc = EpcQrPayload.TryBuild(
             cleanIban,
@@ -46,7 +76,7 @@ public static class PaymentQr
         var epcPng = EpcQrImage.TryCreatePng(epc, pixelsPerModule: 5);
         if (epcPng is { Length: > 0 })
         {
-            var label = isSk ? "QR Platba" : "Platba QR (EPC)";
+            var label = isSk ? "QR Platba (EPC)" : "Platba QR (EPC)";
             return new PaymentQrResult(PaymentQrKind.Epc, epcPng, label);
         }
 

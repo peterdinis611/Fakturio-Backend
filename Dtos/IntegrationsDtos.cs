@@ -17,7 +17,9 @@ public record FsVatPayerResponse(
     string? Dic,
     string? IcDph,
     string? Name,
-    string Source
+    string Source,
+    string? WarningCode = null,
+    string? WarningMessage = null
 );
 
 public record AddressNormalizeResponse(
@@ -217,5 +219,64 @@ public record LeiLookupResponse(
     bool Found,
     int Count,
     IReadOnlyList<LeiRecordItem> Records,
+    string Source
+);
+
+public record SanctionsHitItem(
+    string? Id,
+    string Name,
+    string? Schema,
+    IReadOnlyList<string> Countries,
+    IReadOnlyList<string> Topics,
+    string? DetailUrl
+);
+
+public record SanctionsSearchResponse(
+    string Query,
+    int Count,
+    IReadOnlyList<SanctionsHitItem> Hits,
+    string Source
+);
+
+public record SkObchodnyVestnikResponse(
+    string Ico,
+    bool Found,
+    string? Name,
+    string PortalUrl,
+    string Source
+);
+
+public record CountryItem(
+    string Code,
+    string? Code3,
+    string Name,
+    string? CallingCode
+);
+
+public record CountriesListResponse(
+    IReadOnlyList<CountryItem> Countries,
+    string Source
+);
+
+public record EmailTypoHintResponse(
+    string Email,
+    bool HasSuggestion,
+    string? SuggestedEmail,
+    string? Note,
+    string Source
+);
+
+public record PeppolParticipantItem(
+    string? ParticipantId,
+    string? Name,
+    string? Country,
+    string? Scheme,
+    IReadOnlyList<string> DocumentTypes
+);
+
+public record PeppolLookupResponse(
+    string Ico,
+    bool Found,
+    IReadOnlyList<PeppolParticipantItem> Participants,
     string Source
 );

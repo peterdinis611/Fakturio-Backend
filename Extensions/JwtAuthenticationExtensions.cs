@@ -61,6 +61,15 @@ public static class JwtAuthenticationExtensions
                     },
                     OnTokenValidated = async context =>
                     {
+                        var path = context.HttpContext.Request.Path;
+                        var tokenUse = context.Principal?.FindFirst(JwtTokenService.TokenUseClaimType)?.Value;
+                        if (string.Equals(tokenUse, JwtTokenService.HubTokenUse, StringComparison.Ordinal)
+                            && !path.StartsWithSegments("/hubs"))
+                        {
+                            context.Fail("Hub token cannot access API routes.");
+                            return;
+                        }
+
                         var stampClaim = context.Principal?.FindFirst(JwtTokenService.SecurityStampClaimType)?.Value;
                         var userIdRaw = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier)
                             ?? context.Principal?.FindFirstValue("sub");

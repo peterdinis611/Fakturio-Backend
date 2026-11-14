@@ -10,4 +10,6 @@ public class JwtOptions
     public string Key { get; set; } = string.Empty;
     /// <summary>Access-token lifetime. Prefer short values in production (e.g. 60).</summary>
     public int ExpireMinutes { get; set; } = 60;
+    /// <summary>SignalR hub-token lifetime (minutes). Short-lived by design.</summary>
+    public int HubExpireMinutes { get; set; } = 5;
 }

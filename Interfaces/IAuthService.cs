@@ -14,4 +14,8 @@ public interface IAuthService
         CancellationToken ct = default);
 
     Task<UserResponse?> GetMeAsync(Guid userId, CancellationToken ct = default);
+
+    Task<ServiceResult<HubTokenResponse>> CreateHubTokenAsync(
+        Guid userId,
+        CancellationToken ct = default);
 }

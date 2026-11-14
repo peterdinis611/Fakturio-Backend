@@ -14,11 +14,28 @@ public sealed class JwtTokenService(
     IAdminAccess adminAccess)
 {
     public const string SecurityStampClaimType = "sst";
+    public const string TokenUseClaimType = "tok";
+    public const string HubTokenUse = "hub";
 
     public (string Token, DateTime ExpiresAt) CreateToken(AppUser user)
     {
         var opts = options.Value;
         var expires = DateTime.UtcNow.AddMinutes(Math.Clamp(opts.ExpireMinutes, 5, 60 * 24 * 30));
+        return Issue(user, expires, hubOnly: false);
+    }
+
+    /// <summary>Short-lived JWT for SignalR only — rejected on REST API routes.</summary>
+    public (string Token, DateTime ExpiresAt) CreateHubToken(AppUser user)
+    {
+        var opts = options.Value;
+        var minutes = Math.Clamp(opts.HubExpireMinutes, 1, 30);
+        var expires = DateTime.UtcNow.AddMinutes(minutes);
+        return Issue(user, expires, hubOnly: true);
+    }
+
+    private (string Token, DateTime ExpiresAt) Issue(AppUser user, DateTime expires, bool hubOnly)
+    {
+        var opts = options.Value;
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(opts.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
@@ -35,6 +52,9 @@ public sealed class JwtTokenService(
             new(ClaimTypes.Email, user.Email),
             new(SecurityStampClaimType, user.SecurityStamp.ToString("N")),
         };
+
+        if (hubOnly)
+            claims.Add(new Claim(TokenUseClaimType, HubTokenUse));
 
         if (!string.IsNullOrWhiteSpace(display))
             claims.Add(new Claim(ClaimTypes.Name, display));

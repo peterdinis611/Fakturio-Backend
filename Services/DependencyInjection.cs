@@ -31,6 +31,8 @@ using Fakturio.Api.Services.Users;
 using Fakturio.Api.Services.Gdpr;
 using Fakturio.Api.Services.Recurring;
 using Fakturio.Api.Services.Security;
+using Fakturio.Api.Services.Compliance;
+using Fakturio.Api.Services.Integrations;
 
 namespace Fakturio.Api.Services;
 
@@ -46,6 +48,8 @@ public static class DependencyInjection
         services.Configure<RecurringJobOptions>(configuration.GetSection(RecurringJobOptions.SectionName));
         services.Configure<RegistryOptions>(configuration.GetSection(RegistryOptions.SectionName));
         services.Configure<FxOptions>(configuration.GetSection(FxOptions.SectionName));
+        services.Configure<TurnstileOptions>(configuration.GetSection(TurnstileOptions.SectionName));
+        services.Configure<BankingOptions>(configuration.GetSection(BankingOptions.SectionName));
         services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));
         services.Configure<AttachmentStorageOptions>(configuration.GetSection(AttachmentStorageOptions.SectionName));
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
@@ -175,6 +179,54 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
+        services.AddHttpClient("ruian", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.RuianBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("opensanctions", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.OpenSanctionsBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("restcountries", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.RestCountriesBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
+        services.AddHttpClient("obchodnyvestnik", client =>
+        {
+            client.BaseAddress = new Uri("https://obchodnyvestnik.justice.gov.sk/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("peppol", client =>
+        {
+            client.BaseAddress = new Uri("https://directory.peppol.eu/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("ecb", client =>
+        {
+            var fxConfig = configuration.GetSection(FxOptions.SectionName).Get<FxOptions>() ?? new FxOptions();
+            var ecbUri = fxConfig.EcbDailyFxUrl;
+            var baseUri = ecbUri.Contains("/stats/", StringComparison.Ordinal)
+                ? ecbUri[..ecbUri.IndexOf("/stats/", StringComparison.Ordinal)]
+                : "https://www.ecb.europa.eu";
+            client.BaseAddress = new Uri(EnsureTrailingSlash(baseUri));
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fxConfig.TimeoutSeconds, 5, 30));
+        });
+        services.AddHttpClient("turnstile", client =>
+        {
+            client.BaseAddress = new Uri("https://challenges.cloudflare.com/turnstile/v0/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+        });
 
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
         services.AddScoped<IVatVerificationService, VatVerificationService>();
@@ -188,13 +240,26 @@ public static class DependencyInjection
         services.AddScoped<IRegistrSmluvService, RegistrSmluvService>();
         services.AddScoped<ILeiLookupService, LeiLookupService>();
         services.AddScoped<IIbanLookupService, IbanLookupService>();
-        services.AddSingleton<IAddressNormalizeService, NominatimAddressService>();
+        services.AddSingleton<NominatimAddressService>();
+        services.AddSingleton<RuianAddressService>();
+        services.AddSingleton<SkAddressService>();
+        services.AddSingleton<CzAddressService>();
+        services.AddSingleton<IAddressNormalizeService, CompositeAddressNormalizeService>();
+        services.AddSingleton<ISkAddressService>(sp => sp.GetRequiredService<SkAddressService>());
+        services.AddSingleton<ICzAddressService>(sp => sp.GetRequiredService<CzAddressService>());
         services.AddSingleton<IPostalValidateService, PostalValidateService>();
         services.AddSingleton<IBusinessDayService, BusinessDayService>();
         services.AddSingleton<FrankfurterFxRateService>();
         services.AddSingleton<CnbFxRateService>();
         services.AddSingleton<NbsFxRateService>();
+        services.AddSingleton<EcbFxRateService>();
         services.AddSingleton<IFxRateService, CompositeFxRateService>();
+        services.AddScoped<ISanctionsLookupService, OpenSanctionsService>();
+        services.AddScoped<ISkObchodnyVestnikService, SkObchodnyVestnikService>();
+        services.AddSingleton<IRestCountriesService, RestCountriesService>();
+        services.AddSingleton<IEmailTypoHintService, EmailTypoHintService>();
+        services.AddSingleton<ITurnstileVerifier, TurnstileVerifier>();
+        services.AddScoped<IPeppolDirectoryService, PeppolDirectoryService>();
 
         services.AddHostedService<OverdueSyncBackgroundService>();
         services.AddScoped<INotificationService, NotificationService>();

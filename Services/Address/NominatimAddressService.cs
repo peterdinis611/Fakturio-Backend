@@ -29,7 +29,8 @@ public sealed class NominatimAddressService(
     public async Task<ServiceResult<AddressNormalizeResponse>> NormalizeAsync(
         string query,
         string? countryCode = "SK",
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        string? sourceLabel = null)
     {
         var q = (query ?? string.Empty).Trim();
         if (q.Length < 3)
@@ -91,6 +92,10 @@ public sealed class NominatimAddressService(
                 ? lo
                 : null;
 
+            var source = string.IsNullOrWhiteSpace(sourceLabel)
+                ? "nominatim"
+                : sourceLabel.Trim();
+
             var result = new AddressNormalizeResponse(
                 DisplayName: hit.DisplayName.Trim(),
                 Street: street,
@@ -99,7 +104,7 @@ public sealed class NominatimAddressService(
                 CountryCode: country,
                 Lat: lat,
                 Lon: lon,
-                Source: "nominatim");
+                Source: source);
 
             Cache[cacheKey] = (DateTimeOffset.UtcNow.AddHours(24), result);
             return ServiceResult<AddressNormalizeResponse>.Ok(result);

@@ -14,8 +14,10 @@ public sealed class FioBankService(
     ITenantContext tenant,
     IHttpClientFactory httpClientFactory,
     IFioTokenProtector fioTokens,
-    ILogger<FioBankService> logger) : IFioBankService
+    ILogger<FioBankService> logger) : IFioBankService, IBankPaymentImport
 {
+    public string ProviderKey => "fio";
+
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
     public async Task<ServiceResult<IReadOnlyList<PaymentImportSourceRow>>> FetchTransactionsAsync(

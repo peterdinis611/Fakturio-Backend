@@ -13,6 +13,7 @@ public sealed class CompositeFxRateService(
     FrankfurterFxRateService frankfurter,
     CnbFxRateService cnb,
     NbsFxRateService nbs,
+    EcbFxRateService ecb,
     ILogger<CompositeFxRateService> logger) : IFxRateService
 {
     public Task<ServiceResult<FxRatesResponse>> GetLatestAsync(
@@ -102,7 +103,30 @@ public sealed class CompositeFxRateService(
                 }
                 else
                 {
-                    logger.LogDebug("NBS unavailable; falling back to Frankfurter");
+                    logger.LogDebug("NBS unavailable; trying ECB daily XML");
+                }
+            }
+
+            if (onDate is null)
+            {
+                var missingAfterNbs = symbolList.Where(s => !rates.ContainsKey(s)).ToArray();
+                if (missingAfterNbs.Length > 0)
+                {
+                    var ecbResult = await ecb.GetEurRatesAsync(null, ct);
+                    if (ecbResult.Success && ecbResult.Data is { } ecbData)
+                    {
+                        effectiveDate ??= ecbData.Date;
+                        sources.Add("ecb");
+                        foreach (var sym in missingAfterNbs)
+                        {
+                            if (ecbData.Rates.TryGetValue(sym, out var rate) && rate > 0)
+                                rates[sym] = rate;
+                        }
+                    }
+                    else
+                    {
+                        logger.LogDebug("ECB unavailable; falling back to Frankfurter");
+                    }
                 }
             }
         }

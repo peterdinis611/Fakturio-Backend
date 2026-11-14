@@ -48,7 +48,9 @@ public sealed class FsVatPayerService(
                     Dic: null,
                     IcDph: null,
                     Name: null,
-                    Source: "subjekt+fs"));
+                    Source: "subjekt+fs",
+                    WarningCode: null,
+                    WarningMessage: null));
             }
 
             if (!response.IsSuccessStatusCode)
@@ -72,13 +74,17 @@ public sealed class FsVatPayerService(
             if (dic is not null && !SlovakValidators.BeValidDic(dic))
                 dic = null;
 
+            var (warnCode, warnMsg) = ExtractWarnings(tax);
+
             return ServiceResult<FsVatPayerResponse>.Ok(new FsVatPayerResponse(
                 IsVatPayer: icDph is not null,
                 Ico: normalized,
                 Dic: dic,
                 IcDph: icDph,
                 Name: Normalize(tax?.Name),
-                Source: "subjekt+fs"));
+                Source: "subjekt+fs",
+                WarningCode: warnCode,
+                WarningMessage: warnMsg));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -97,11 +103,28 @@ public sealed class FsVatPayerService(
     private static string? Normalize(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    private static (string? Code, string? Message) ExtractWarnings(SubjektEntity? tax)
+    {
+        if (tax is null)
+            return (null, null);
+
+        var code = Normalize(tax.WarningCode);
+        var msg = Normalize(tax.WarningMessage) ?? Normalize(tax.Warning);
+        if (code is null && msg is null)
+            return (null, null);
+        return (code, msg);
+    }
+
     private sealed class SubjektEntity
     {
         public string? Name { get; set; }
         public string? Dic { get; set; }
         [JsonPropertyName("ic_dph")]
         public string? IcDph { get; set; }
+        [JsonPropertyName("warning_code")]
+        public string? WarningCode { get; set; }
+        [JsonPropertyName("warning_message")]
+        public string? WarningMessage { get; set; }
+        public string? Warning { get; set; }
     }
 }

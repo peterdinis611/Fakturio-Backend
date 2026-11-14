@@ -15,7 +15,9 @@ public sealed class AuthService(
     JwtTokenService tokens,
     IAdminAccess adminAccess,
     IPasswordHasher<AppUser> passwordHasher,
-    IAuditLogService audit) : IAuthService
+    IAuditLogService audit,
+    ITurnstileVerifier turnstile,
+    IHttpContextAccessor httpContextAccessor) : IAuthService
 {
     public async Task<ServiceResult<AuthResponse>> RegisterAsync(
         RegisterRequest request,
@@ -24,6 +26,14 @@ public sealed class AuthService(
         var email = NormalizeEmail(request.Email);
         if (email is null)
             return ServiceResult<AuthResponse>.BadRequest("E-mail je povinný.", ErrorCodes.BadRequest);
+
+        var remoteIp = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+        if (!await turnstile.VerifyAsync(request.TurnstileToken, remoteIp, ct))
+        {
+            return ServiceResult<AuthResponse>.BadRequest(
+                "Overenie captcha zlyhalo. Skús to znova.",
+                ErrorCodes.BadRequest);
+        }
 
         // Admin emails are allowlisted in config — block public registration to prevent takeover.
         if (adminAccess.IsAdminEmail(email))
@@ -127,6 +137,20 @@ public sealed class AuthService(
             return null;
 
         return UserMapper.ToResponse(user, adminAccess.IsAdminEmail(user.Email));
+    }
+
+    public async Task<ServiceResult<HubTokenResponse>> CreateHubTokenAsync(
+        Guid userId,
+        CancellationToken ct = default)
+    {
+        var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+            return ServiceResult<HubTokenResponse>.Unauthorized(
+                "Neautorizovaný prístup.",
+                ErrorCodes.Unauthorized);
+
+        var (token, expires) = tokens.CreateHubToken(user);
+        return ServiceResult<HubTokenResponse>.Ok(new HubTokenResponse(token, expires));
     }
 
     private AuthResponse BuildAuthResponse(AppUser user)

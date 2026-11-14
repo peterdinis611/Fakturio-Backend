@@ -45,6 +45,19 @@ public sealed class AuthController(IAuthService auth) : ApiControllerBase
             ErrorCodes.NotFound);
     }
 
+    /// <summary>Short-lived JWT for SignalR (claim tok=hub). Session JWT must not leave the BFF.</summary>
+    [Authorize]
+    [HttpGet("hub-token")]
+    [ProducesResponseType(typeof(HubTokenResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<HubTokenResponse>> HubToken(CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId is null)
+            return Unauthorized();
+
+        return (await auth.CreateHubTokenAsync(userId.Value, ct)).ToActionResult(this);
+    }
+
     private Guid? GetUserId()
     {
         var raw = User.FindFirstValue(ClaimTypes.NameIdentifier)
