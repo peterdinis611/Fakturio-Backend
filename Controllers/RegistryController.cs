@@ -2,9 +2,11 @@ using Fakturio.Api.Dtos;
 using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fakturio.Api.Controllers;
 
+[EnableRateLimiting(RateLimitingExtensions.IntegrationsPolicy)]
 [Route("api/registry")]
 public sealed class RegistryController(
     ICompanyRegistryService registry,

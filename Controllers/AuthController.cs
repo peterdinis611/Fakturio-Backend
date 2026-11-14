@@ -5,6 +5,7 @@ using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fakturio.Api.Controllers;
 
@@ -12,6 +13,7 @@ namespace Fakturio.Api.Controllers;
 public sealed class AuthController(IAuthService auth) : ApiControllerBase
 {
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthPolicy)]
     [HttpPost("register")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status201Created)]
     public async Task<ActionResult<AuthResponse>> Register(
@@ -20,6 +22,7 @@ public sealed class AuthController(IAuthService auth) : ApiControllerBase
         => (await auth.RegisterAsync(request, ct)).ToActionResult(this);
 
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.AuthPolicy)]
     [HttpPost("login")]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<AuthResponse>> Login(

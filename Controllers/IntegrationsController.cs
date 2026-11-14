@@ -2,10 +2,12 @@ using Fakturio.Api.Dtos;
 using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fakturio.Api.Controllers;
 
 /// <summary>Key-free external lookups and local calendars.</summary>
+[EnableRateLimiting(RateLimitingExtensions.IntegrationsPolicy)]
 [Route("api/integrations")]
 public sealed class IntegrationsController(
     IIbanLookupService ibanLookup,

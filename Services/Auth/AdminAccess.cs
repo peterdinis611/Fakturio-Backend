@@ -28,13 +28,8 @@ public sealed class AdminAccess(IOptions<AdminOptions> options) : IAdminAccess
         if (user is null)
             return false;
 
-        if (user.IsInRole(RoleName)
-            || user.HasClaim(ClaimTypes.Role, RoleName)
-            || user.HasClaim("role", RoleName))
-        {
-            return true;
-        }
-
+        // Always re-check against configured allowlist using the email claim —
+        // do not trust a forged/stale "Admin" role claim alone.
         var email = user.FindFirstValue(ClaimTypes.Email)
                     ?? user.FindFirstValue(ClaimTypes.Upn)
                     ?? user.FindFirstValue("email");

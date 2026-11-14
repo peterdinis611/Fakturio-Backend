@@ -11,7 +11,7 @@ public class CacheInvalidationTests
     public CacheInvalidationTests(FakturioApiFactory factory) => _factory = factory;
 
     [Fact]
-    public async Task Invalidate_returns_no_content()
+    public async Task Invalidate_as_admin_returns_no_content()
     {
         var client = _factory.CreateClient();
         await DemoAuth.LoginAsDemoAsync(client);
@@ -26,5 +26,15 @@ public class CacheInvalidationTests
         var client = _factory.CreateClient();
         var res = await client.PostAsync("/api/cache/invalidate", null);
         Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+    }
+
+    [Fact]
+    public async Task Invalidate_as_non_admin_returns_forbidden()
+    {
+        var client = _factory.CreateClient();
+        await DemoAuth.RegisterAndLoginAsync(client, $"user-{Guid.NewGuid():N}@example.com");
+
+        var res = await client.PostAsync("/api/cache/invalidate", null);
+        Assert.Equal(HttpStatusCode.Forbidden, res.StatusCode);
     }
 }

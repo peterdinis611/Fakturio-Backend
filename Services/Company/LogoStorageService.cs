@@ -12,7 +12,7 @@ public sealed class LogoStorageService(
     ILogger<LogoStorageService> logger) : ILogoStorageService
 {
     private static readonly HashSet<string> AllowedExtensions =
-        new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp", ".svg" };
+        new(StringComparer.OrdinalIgnoreCase) { ".png", ".jpg", ".jpeg", ".webp" };
 
     public async Task<ServiceResult<string>> SaveAsync(IFormFile file, CancellationToken ct = default)
     {
@@ -29,7 +29,7 @@ public sealed class LogoStorageService(
         var contentType = (file.ContentType ?? string.Empty).Trim().ToLowerInvariant();
         if (!opts.AllowedContentTypes.Contains(contentType, StringComparer.OrdinalIgnoreCase))
             return ServiceResult<string>.BadRequest(
-                "Allowed formats: PNG, JPEG, WebP, SVG.",
+                "Allowed formats: PNG, JPEG, WebP.",
                 ErrorCodes.InvalidFileType);
 
         var ext = Path.GetExtension(file.FileName);
@@ -38,7 +38,7 @@ public sealed class LogoStorageService(
 
         if (ext is null)
             return ServiceResult<string>.BadRequest(
-                "Allowed formats: PNG, JPEG, WebP, SVG.",
+                "Allowed formats: PNG, JPEG, WebP.",
                 ErrorCodes.InvalidFileType);
 
         var logosDir = GetLogosDirectory();
@@ -87,7 +87,7 @@ public sealed class LogoStorageService(
             return null;
 
         var ext = Path.GetExtension(absolutePath).ToLowerInvariant();
-        if (ext is ".svg" or "")
+        if (string.IsNullOrEmpty(ext) || !AllowedExtensions.Contains(ext))
             return null;
 
         if (!File.Exists(absolutePath))
@@ -139,7 +139,6 @@ public sealed class LogoStorageService(
         "image/png" => ".png",
         "image/jpeg" or "image/jpg" => ".jpg",
         "image/webp" => ".webp",
-        "image/svg+xml" => ".svg",
         _ => null,
     };
 }

@@ -7,8 +7,10 @@ using Fakturio.Api.Middleware;
 using Fakturio.Api.Services;
 using Fakturio.Api.Validation;
 using FluentValidation;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using QuestPDF.Infrastructure;
 using Serilog;
@@ -25,6 +27,14 @@ try
 
     var builder = WebApplication.CreateBuilder(args);
     builder.Host.AddFakturioSerilog();
+
+    builder.Services.Configure<ForwardedHeadersOptions>(options =>
+    {
+        options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        // Reverse proxies (Docker / nginx / Cloudflare) terminate TLS in front of the container.
+        options.KnownIPNetworks.Clear();
+        options.KnownProxies.Clear();
+    });
 
     builder.Services.AddControllers(options =>
     {
@@ -59,7 +69,8 @@ try
     builder.Services.AddValidatorsFromAssemblyContaining<CreateCustomerRequestValidator>();
     builder.Services.AddApplicationCaching(builder.Configuration);
     builder.Services.AddApplicationServices(builder.Configuration);
-    builder.Services.AddJwtAuthentication(builder.Configuration);
+    builder.Services.AddJwtAuthentication(builder.Configuration, builder.Environment);
+    builder.Services.AddFakturioRateLimiting(builder.Configuration);
     builder.Services.AddSignalR();
 
     var redisConnection =
@@ -108,18 +119,12 @@ try
         }
     }
 
+    app.UseForwardedHeaders();
+
     if (app.Environment.IsDevelopment())
     {
         app.MapFakturioOpenApi();
     }
-
-    var uploadsRoot = Path.Combine(app.Environment.ContentRootPath, "uploads");
-    Directory.CreateDirectory(Path.Combine(uploadsRoot, "logos"));
-    app.UseStaticFiles(new StaticFileOptions
-    {
-        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(uploadsRoot),
-        RequestPath = "/uploads",
-    });
 
     app.UseFakturioMiddleware();
     app.UseFakturioRequestLogging();
@@ -127,11 +132,31 @@ try
     app.UseCors();
     if (!builder.Configuration.GetValue("DisableHttpsRedirection", false))
         app.UseHttpsRedirection();
+    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseMiddleware<UserIdLogContextMiddleware>();
     app.UseAuthorization();
+
+    // Public logos only — invoice attachments must go through authenticated download APIs.
+    var logosRoot = Path.Combine(app.Environment.ContentRootPath, "uploads", "logos");
+    Directory.CreateDirectory(logosRoot);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new PhysicalFileProvider(logosRoot),
+        RequestPath = "/uploads/logos",
+        OnPrepareResponse = ctx =>
+        {
+            SecurityHeadersMiddleware.Apply(
+                ctx.Context.Response.Headers,
+                SecurityHeadersMiddleware.IsHttps(ctx.Context.Request));
+            ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+            ctx.Context.Response.Headers["Content-Disposition"] = "inline";
+            ctx.Context.Response.Headers["Cache-Control"] = "public, max-age=86400";
+        },
+    });
+
     app.MapControllers();
-    app.MapHealthChecks("/health");
+    app.MapHealthChecks("/health").AllowAnonymous();
     app.MapHub<SignalHub>("/hubs/signal");
 
     app.Run();

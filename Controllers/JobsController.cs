@@ -1,9 +1,11 @@
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Fakturio.Api.Controllers;
 
+[Authorize(Policy = "Admin")]
 [Route("api/jobs")]
 public sealed class JobsController(IJobSettingsStore store) : ApiControllerBase
 {

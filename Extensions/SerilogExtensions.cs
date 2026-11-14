@@ -85,9 +85,7 @@ public static class SerilogExtensions
                 diagnosticContext.Set("RequestPath", httpContext.Request.Path.Value ?? "/");
                 diagnosticContext.Set(
                     "QueryString",
-                    httpContext.Request.QueryString.HasValue
-                        ? httpContext.Request.QueryString.Value!
-                        : string.Empty);
+                    RedactSensitiveQuery(httpContext.Request.QueryString));
                 diagnosticContext.Set("Endpoint", ResolveEndpointName(httpContext));
             };
         });
@@ -104,5 +102,31 @@ public static class SerilogExtensions
             return $"{action.ControllerName}.{action.ActionName}";
 
         return endpoint.DisplayName ?? "-";
+    }
+
+    /// <summary>Strip SignalR / OAuth tokens from request logs.</summary>
+    private static string RedactSensitiveQuery(QueryString query)
+    {
+        if (!query.HasValue)
+            return string.Empty;
+
+        var value = query.Value!;
+        if (!value.Contains("access_token", StringComparison.OrdinalIgnoreCase)
+            && !value.Contains("token=", StringComparison.OrdinalIgnoreCase))
+            return value;
+
+        var parts = value.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        for (var i = 0; i < parts.Length; i++)
+        {
+            var eq = parts[i].IndexOf('=');
+            var key = eq >= 0 ? parts[i][..eq] : parts[i];
+            if (key.Equals("access_token", StringComparison.OrdinalIgnoreCase)
+                || key.Equals("token", StringComparison.OrdinalIgnoreCase))
+            {
+                parts[i] = $"{key}=REDACTED";
+            }
+        }
+
+        return "?" + string.Join('&', parts);
     }
 }

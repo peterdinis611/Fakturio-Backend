@@ -75,6 +75,15 @@ public sealed class UserService(
             if (email is null)
                 return ServiceResult<UserResponse>.BadRequest("E-mail je povinný.", ErrorCodes.BadRequest);
 
+            // Prevent privilege escalation by renaming into an Admin:Emails allowlist address.
+            if (adminAccess.IsAdminEmail(email)
+                && !string.Equals(user.Email, email, StringComparison.Ordinal))
+            {
+                return ServiceResult<UserResponse>.BadRequest(
+                    "Tento e-mail nie je možné použiť.",
+                    ErrorCodes.BadRequest);
+            }
+
             var emailTaken = await db.Users.AnyAsync(u => u.Id != id && u.Email == email, ct);
             if (emailTaken)
                 return ServiceResult<UserResponse>.Conflict(

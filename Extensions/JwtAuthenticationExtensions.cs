@@ -9,20 +9,20 @@ namespace Fakturio.Api.Extensions;
 
 public static class JwtAuthenticationExtensions
 {
+    /// <summary>Known insecure placeholder — never allowed outside Development.</summary>
+    public const string DevelopmentPlaceholderKey = "dev-only-change-me-fakturio-jwt-secret-key-32+";
+
     public static IServiceCollection AddJwtAuthentication(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
         var jwt = configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>()
             ?? new JwtOptions();
 
-        if (string.IsNullOrWhiteSpace(jwt.Key) || jwt.Key.Length < 32)
-        {
-            throw new InvalidOperationException(
-                "Jwt:Key must be configured and at least 32 characters long.");
-        }
+        ValidateJwtKey(jwt.Key, environment);
 
         services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(options =>
@@ -62,9 +62,30 @@ public static class JwtAuthenticationExtensions
         services.AddSingleton<IAuthorizationHandler, AdminAuthorizationHandler>();
         services.AddAuthorization(options =>
         {
+            options.FallbackPolicy = new AuthorizationPolicyBuilder()
+                .RequireAuthenticatedUser()
+                .Build();
+
             options.AddPolicy("Admin", policy =>
                 policy.Requirements.Add(new AdminRequirement()));
         });
         return services;
+    }
+
+    internal static void ValidateJwtKey(string? key, IHostEnvironment environment)
+    {
+        if (string.IsNullOrWhiteSpace(key) || key.Length < 32)
+        {
+            throw new InvalidOperationException(
+                "Jwt:Key must be configured and at least 32 characters long.");
+        }
+
+        if (!environment.IsDevelopment()
+            && string.Equals(key, DevelopmentPlaceholderKey, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                "Jwt:Key must not use the development placeholder outside Development. "
+                + "Set Jwt__Key / JWT_KEY to a unique secret (e.g. openssl rand -base64 48).");
+        }
     }
 }

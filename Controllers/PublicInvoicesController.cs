@@ -3,10 +3,12 @@ using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fakturio.Api.Controllers;
 
 [AllowAnonymous]
+[EnableRateLimiting(RateLimitingExtensions.PublicPolicy)]
 [Route("api/public/invoices")]
 public sealed class PublicInvoicesController(IPublicInvoiceService invoices) : ControllerBase
 {

@@ -15,6 +15,5 @@ public sealed class LogoStorageOptions
         "image/jpeg",
         "image/jpg",
         "image/webp",
-        "image/svg+xml",
     ];
 }

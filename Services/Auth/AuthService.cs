@@ -25,6 +25,12 @@ public sealed class AuthService(
         if (email is null)
             return ServiceResult<AuthResponse>.BadRequest("E-mail je povinný.", ErrorCodes.BadRequest);
 
+        // Admin emails are allowlisted in config — block public registration to prevent takeover.
+        if (adminAccess.IsAdminEmail(email))
+            return ServiceResult<AuthResponse>.BadRequest(
+                "Tento e-mail nie je možné zaregistrovať.",
+                ErrorCodes.BadRequest);
+
         if (string.IsNullOrWhiteSpace(request.Password) || !IsStrongPassword(request.Password))
             return ServiceResult<AuthResponse>.BadRequest(
                 "Heslo musí mať aspoň 8 znakov, veľké a malé písmeno a špeciálny znak.",

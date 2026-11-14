@@ -19,6 +19,8 @@ public sealed class FakturioApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("ReminderJob:Enabled", "false");
         builder.UseSetting("RecurringInvoices:Enabled", "false");
         builder.UseSetting("DisableHttpsRedirection", "true");
+        // Shared test host IP would trip auth rate limits across the suite.
+        builder.UseSetting("RateLimiting:Enabled", "false");
     }
 
     protected override void Dispose(bool disposing)

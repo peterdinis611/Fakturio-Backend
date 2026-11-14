@@ -11,7 +11,8 @@ namespace Fakturio.Api.Services.Payments;
 public sealed class FioBankService(
     AppDbContext db,
     ITenantContext tenant,
-    IHttpClientFactory httpClientFactory) : IFioBankService
+    IHttpClientFactory httpClientFactory,
+    ILogger<FioBankService> logger) : IFioBankService
 {
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -47,6 +48,7 @@ public sealed class FioBankService(
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
+            logger.LogWarning(ex, "FIO API request failed for period {From}–{To}", fromStr, toStr);
             return ServiceResult<IReadOnlyList<PaymentImportSourceRow>>.Fail(
                 "FIO API is unavailable.",
                 StatusCodes.Status503ServiceUnavailable,
@@ -56,10 +58,12 @@ public sealed class FioBankService(
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync(ct);
+            logger.LogWarning(
+                "FIO API returned {StatusCode}: {Body}",
+                (int)response.StatusCode,
+                body.Length > 500 ? body[..500] : body);
             return ServiceResult<IReadOnlyList<PaymentImportSourceRow>>.BadRequest(
-                string.IsNullOrWhiteSpace(body)
-                    ? $"FIO API returned {(int)response.StatusCode}."
-                    : $"FIO API error: {body.Trim()}",
+                "FIO API request failed. Check the bank token and try again.",
                 ErrorCodes.BadRequest);
         }
 

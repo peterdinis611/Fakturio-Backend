@@ -28,7 +28,7 @@ public static class OpenApiExtensions
 
     public static WebApplication MapFakturioOpenApi(this WebApplication app)
     {
-        app.MapOpenApi();
+        app.MapOpenApi().AllowAnonymous();
         app.UseSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/openapi/v1.json", "Fakturio API v1");
