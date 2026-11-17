@@ -1,3 +1,4 @@
+using Fakturio.Api.Common;
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Models;
 using FluentValidation;
@@ -203,6 +204,26 @@ public class CreateCreditNoteRequestValidator : AbstractValidator<CreateCreditNo
         RuleForEach(x => x.Items)
             .SetValidator(new CreateInvoiceItemRequestValidator())
             .When(x => x.Items is { Count: > 0 });
+    }
+}
+
+public class SendInvoiceEmailRequestValidator : AbstractValidator<SendInvoiceEmailRequest>
+{
+    public SendInvoiceEmailRequestValidator()
+    {
+        RuleFor(x => x.To)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.To))
+            .WithMessage("Neplatný e-mail príjemcu.")
+            .WithErrorCode(ErrorCodes.InvalidEmail);
+
+        RuleFor(x => x.Subject)
+            .MaximumLength(200)
+            .When(x => x.Subject is not null);
+
+        RuleFor(x => x.Message)
+            .MaximumLength(4000)
+            .When(x => x.Message is not null);
     }
 }
 

@@ -6,12 +6,12 @@ using Microsoft.EntityFrameworkCore;
 namespace Fakturio.Api.Services.Reminders;
 
 /// <summary>
-/// Creates in-app notifications (SignalR) for reminder candidates, respecting user preferences.
-/// Email channel is preference-gated and logged until a key-free mail path is wired.
+/// Creates in-app notifications (SignalR) for reminder candidates and sends email when enabled.
 /// </summary>
 public sealed class SignalHubReminderNotifier(
     AppDbContext db,
     INotificationService notifications,
+    IInvoiceEmailService emails,
     ILogger<SignalHubReminderNotifier> logger) : IReminderNotifier
 {
     public async Task NotifyAsync(InvoiceReminderItemResponse reminder, CancellationToken ct = default)
@@ -67,30 +67,49 @@ public sealed class SignalHubReminderNotifier(
                 ? ""
                 : $" · {reminder.CustomerEmail}");
 
-        var published = await notifications.PublishAsync(
-            company.UserId,
-            company.Id,
-            title,
-            body,
-            $"/invoices/{reminder.Id}",
-            reminder.Id,
-            reminder.Number,
-            ct);
-
-        if (published is not null)
+        var inAppAllowed = prefs is null || prefs.InAppEnabled;
+        if (inAppAllowed)
         {
-            logger.LogInformation(
-                "In-app reminder queued for {Number} → user {UserId}",
+            var published = await notifications.PublishAsync(
+                company.UserId,
+                company.Id,
+                title,
+                body,
+                $"/invoices/{reminder.Id}",
+                reminder.Id,
                 reminder.Number,
-                company.UserId);
+                ct);
+
+            if (published is not null)
+            {
+                logger.LogInformation(
+                    "In-app reminder queued for {Number} → user {UserId}",
+                    reminder.Number,
+                    company.UserId);
+            }
         }
 
         if (prefs?.EmailEnabled == true)
         {
-            logger.LogInformation(
-                "Email reminder preferred for {Number} → {Email} (no mail provider configured; skipped send).",
-                reminder.Number,
-                reminder.CustomerEmail ?? company.Email ?? "—");
+            var sent = await emails.TrySendReminderAsync(
+                reminder,
+                company.Id,
+                company.UserId,
+                ct);
+            if (sent)
+            {
+                logger.LogInformation(
+                    "Email reminder sent for {Number} → {Email}",
+                    reminder.Number,
+                    reminder.CustomerEmail);
+            }
+            else
+            {
+                logger.LogInformation(
+                    "Email reminder not sent for {Number} → {Email} (provider/recipient).",
+                    reminder.Number,
+                    reminder.CustomerEmail ?? "—");
+            }
         }
     }
 }

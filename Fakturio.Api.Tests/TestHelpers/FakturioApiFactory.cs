@@ -21,6 +21,10 @@ public sealed class FakturioApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("DisableHttpsRedirection", "true");
         // Shared test host IP would trip auth rate limits across the suite.
         builder.UseSetting("RateLimiting:Enabled", "false");
+        // Match Development: virtual delivery so invoice email + audit can be exercised.
+        builder.UseSetting("Email:Provider", "Virtual");
+        builder.UseSetting("Email:FromAddress", "noreply@localhost");
+        builder.UseSetting("Email:FromName", "Fakturio Test");
     }
 
     protected override void Dispose(bool disposing)

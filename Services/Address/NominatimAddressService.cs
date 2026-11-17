@@ -13,7 +13,7 @@ namespace Fakturio.Api.Services.Address;
 /// <summary>OSM Nominatim — strict rate limit; in-memory cache.</summary>
 public sealed class NominatimAddressService(
     IHttpClientFactory httpClientFactory,
-    ILogger<NominatimAddressService> logger) : IAddressNormalizeService
+    ILogger<NominatimAddressService> logger)
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

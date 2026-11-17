@@ -32,6 +32,7 @@ using Fakturio.Api.Services.Gdpr;
 using Fakturio.Api.Services.Recurring;
 using Fakturio.Api.Services.Security;
 using Fakturio.Api.Services.Compliance;
+using Fakturio.Api.Services.Email;
 using Fakturio.Api.Services.Integrations;
 
 namespace Fakturio.Api.Services;
@@ -53,10 +54,12 @@ public static class DependencyInjection
         services.Configure<LogoStorageOptions>(configuration.GetSection(LogoStorageOptions.SectionName));
         services.Configure<AttachmentStorageOptions>(configuration.GetSection(AttachmentStorageOptions.SectionName));
         services.Configure<AdminOptions>(configuration.GetSection(AdminOptions.SectionName));
+        services.Configure<EmailOptions>(configuration.GetSection(EmailOptions.SectionName));
         services.AddSingleton<IAdminAccess, AdminAccess>();
         services.AddSingleton<IJobSettingsStore, JobSettingsStore>();
         services.AddSingleton<ILogoStorageService, LogoStorageService>();
         services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IAdminRaService, AdminRaService>();
 
         var registry = configuration.GetSection(RegistryOptions.SectionName).Get<RegistryOptions>()
             ?? new RegistryOptions();
@@ -227,6 +230,36 @@ public static class DependencyInjection
             client.BaseAddress = new Uri("https://challenges.cloudflare.com/turnstile/v0/");
             client.Timeout = TimeSpan.FromSeconds(10);
         });
+        var emailOpts = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>()
+            ?? new EmailOptions();
+        services.AddHttpClient("resend", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(
+                string.IsNullOrWhiteSpace(emailOpts.Resend.BaseUrl)
+                    ? "https://api.resend.com/"
+                    : emailOpts.Resend.BaseUrl));
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.Accept.Add(
+                new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+
+        services.AddSingleton<NullEmailSender>();
+        services.AddSingleton<VirtualEmailSender>();
+        services.AddSingleton<SmtpEmailSender>();
+        services.AddSingleton<ResendEmailSender>();
+        services.AddSingleton<IEmailSender>(sp =>
+        {
+            var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailOptions>>().Value;
+            return opts.Provider.Trim().ToLowerInvariant() switch
+            {
+                "smtp" => sp.GetRequiredService<SmtpEmailSender>(),
+                "resend" => sp.GetRequiredService<ResendEmailSender>(),
+                "virtual" or "log" => sp.GetRequiredService<VirtualEmailSender>(),
+                _ => sp.GetRequiredService<NullEmailSender>(),
+            };
+        });
+        services.AddScoped<IInvoiceEmailService, InvoiceEmailService>();
 
         services.AddScoped<ICompanyRegistryService, CompanyRegistryService>();
         services.AddScoped<IVatVerificationService, VatVerificationService>();
@@ -290,7 +323,10 @@ public static class DependencyInjection
         services.AddScoped<ICacheInvalidator, CacheInvalidator>();
         services.AddScoped<IExportService, CsvExportService>();
         services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
-        services.AddScoped<IFioBankService, FioBankService>();
+        services.AddScoped<FioBankService>();
+        services.AddScoped<IFioBankService>(sp => sp.GetRequiredService<FioBankService>());
+        services.AddScoped<IBankPaymentImport>(sp => sp.GetRequiredService<FioBankService>());
+        services.AddScoped<Psd2SandboxPaymentImport>();
         services.AddScoped<IPaymentImportService, PaymentImportService>();
         services.AddScoped<IResumeService, ResumeService>();
         services.AddScoped<INoteService, NoteService>();

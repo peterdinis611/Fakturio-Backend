@@ -57,4 +57,8 @@ public static class ErrorCodes
     public const string FileTooLarge = "file_too_large";
     public const string InvalidFileType = "invalid_file_type";
     public const string CompanyNotReady = "company_not_ready";
+
+    public const string InvalidEmail = "invalid_email";
+    public const string EmailNotConfigured = "email_not_configured";
+    public const string EmailSendFailed = "email_send_failed";
 }

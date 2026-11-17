@@ -22,7 +22,14 @@ public sealed class IntegrationsController(
     IBusinessDayService businessDays,
     IRpvsService rpvs,
     IRegistrSmluvService registrSmluv,
-    ILeiLookupService lei) : ApiControllerBase
+    ILeiLookupService lei,
+    ICzAddressService czAddress,
+    ISkAddressService skAddress,
+    ISanctionsLookupService sanctions,
+    ISkObchodnyVestnikService obchodnyVestnik,
+    IRestCountriesService countries,
+    IEmailTypoHintService emailHints,
+    IPeppolDirectoryService peppol) : ApiControllerBase
 {
     [HttpGet("iban")]
     [ProducesResponseType(typeof(IbanLookupResponse), StatusCodes.Status200OK)]
@@ -45,6 +52,20 @@ public sealed class IntegrationsController(
         [FromQuery] string? country = "SK",
         CancellationToken ct = default)
         => (await addresses.NormalizeAsync(q, country, ct)).ToActionResult(this);
+
+    [HttpGet("cz-address")]
+    [ProducesResponseType(typeof(AddressNormalizeResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AddressNormalizeResponse>> LookupCzAddress(
+        [FromQuery] string q,
+        CancellationToken ct = default)
+        => (await czAddress.LookupAsync(q, ct)).ToActionResult(this);
+
+    [HttpGet("sk-address")]
+    [ProducesResponseType(typeof(AddressNormalizeResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AddressNormalizeResponse>> LookupSkAddress(
+        [FromQuery] string q,
+        CancellationToken ct = default)
+        => (await skAddress.LookupAsync(q, ct)).ToActionResult(this);
 
     [HttpGet("orsr/{ico}")]
     [ProducesResponseType(typeof(OrsrCompanySummaryResponse), StatusCodes.Status200OK)]
@@ -134,4 +155,35 @@ public sealed class IntegrationsController(
         string leiCode,
         CancellationToken ct)
         => (await lei.LookupByLeiAsync(leiCode, ct)).ToActionResult(this);
+
+    [HttpGet("sanctions")]
+    [ProducesResponseType(typeof(SanctionsSearchResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<SanctionsSearchResponse>> Sanctions(
+        [FromQuery] string q,
+        CancellationToken ct = default)
+        => (await sanctions.SearchAsync(q, ct)).ToActionResult(this);
+
+    [HttpGet("obchodny-vestnik")]
+    [ProducesResponseType(typeof(SkObchodnyVestnikResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<SkObchodnyVestnikResponse>> ObchodnyVestnik(
+        [FromQuery] string ico,
+        CancellationToken ct = default)
+        => (await obchodnyVestnik.LookupByIcoAsync(ico, ct)).ToActionResult(this);
+
+    [HttpGet("countries")]
+    [ProducesResponseType(typeof(CountriesListResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CountriesListResponse>> Countries(CancellationToken ct = default)
+        => (await countries.GetAllAsync(ct)).ToActionResult(this);
+
+    [HttpGet("email-typo")]
+    [ProducesResponseType(typeof(EmailTypoHintResponse), StatusCodes.Status200OK)]
+    public ActionResult<EmailTypoHintResponse> EmailTypo([FromQuery] string email)
+        => emailHints.Suggest(email).ToActionResult(this);
+
+    [HttpGet("peppol")]
+    [ProducesResponseType(typeof(PeppolLookupResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PeppolLookupResponse>> Peppol(
+        [FromQuery] string ico,
+        CancellationToken ct = default)
+        => (await peppol.LookupByIcoAsync(ico, ct)).ToActionResult(this);
 }

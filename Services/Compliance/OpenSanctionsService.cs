@@ -38,10 +38,7 @@ public sealed class OpenSanctionsService(
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("OpenSanctions returned {StatusCode}", (int)response.StatusCode);
-                return ServiceResult<SanctionsSearchResponse>.Fail(
-                    "Sanctions search is temporarily unavailable.",
-                    StatusCodes.Status502BadGateway,
-                    ErrorCodes.RegistryUnavailable);
+                return SoftEmpty(q, "opensanctions-unavailable");
             }
 
             var payload = await response.Content.ReadFromJsonAsync<OpenSanctionsPayload>(JsonOptions, ct);
@@ -67,12 +64,16 @@ public sealed class OpenSanctionsService(
         catch (Exception ex)
         {
             logger.LogWarning(ex, "OpenSanctions failed for {Query}", q);
-            return ServiceResult<SanctionsSearchResponse>.Fail(
-                "Sanctions search is temporarily unavailable.",
-                StatusCodes.Status502BadGateway,
-                ErrorCodes.RegistryUnavailable);
+            return SoftEmpty(q, "opensanctions-soft-fail");
         }
     }
+
+    private static ServiceResult<SanctionsSearchResponse> SoftEmpty(string q, string source)
+        => ServiceResult<SanctionsSearchResponse>.Ok(new SanctionsSearchResponse(
+            Query: q,
+            Count: 0,
+            Hits: [],
+            Source: source));
 
     private static SanctionsHitItem? MapHit(OpenSanctionsHit hit)
     {

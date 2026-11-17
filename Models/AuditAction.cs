@@ -26,4 +26,5 @@ public enum AuditAction
     RecurringDeleted = 21,
     RecurringGenerated = 22,
     LoginSucceeded = 23,
+    EmailSent = 24,
 }

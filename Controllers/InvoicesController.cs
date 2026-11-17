@@ -12,7 +12,8 @@ public sealed class InvoicesController(
     IInvoiceService invoices,
     IInvoicePdfService pdfs,
     IInvoiceIsdocService isdoc,
-    IInvoicePublicLinkService publicLinks) : ApiControllerBase
+    IInvoicePublicLinkService publicLinks,
+    IInvoiceEmailService emails) : ApiControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(PagedResponse<InvoiceListItemResponse>), StatusCodes.Status200OK)]
@@ -143,6 +144,18 @@ public sealed class InvoicesController(
         Guid id,
         CancellationToken ct)
         => (await invoices.MarkReminderSentAsync(id, ct)).ToActionResult(this);
+
+    [HttpPost("{id:guid}/email")]
+    [ProducesResponseType(typeof(SendInvoiceEmailResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<SendInvoiceEmailResponse>> SendEmail(
+        Guid id,
+        [FromBody] SendInvoiceEmailRequest? request,
+        CancellationToken ct)
+        => (await emails.SendInvoiceAsync(
+                id,
+                request ?? new SendInvoiceEmailRequest(null, null, null),
+                ct))
+            .ToActionResult(this);
 
     [HttpPost("{id:guid}/duplicate")]
     [ProducesResponseType(typeof(InvoiceResponse), StatusCodes.Status201Created)]

@@ -69,18 +69,30 @@ public static class PayBySquareEncoder
         {
             using var inStream = new MemoryStream(input);
             using var outStream = new MemoryStream();
-            var encoder = new Encoder();
-            encoder.SetCoderProperties(
-            [
-                CoderPropID.DictionarySize, 1 << 16,
-                CoderPropID.PosStateBits, 2,
-                CoderPropID.LitContextBits, 3,
-                CoderPropID.LitPosBits, 0,
-                CoderPropID.Algorithm, 2,
-                CoderPropID.NumFastBytes, 32,
-                CoderPropID.MatchFinder, "BT4",
-                CoderPropID.EndMarker, false
-            ]);
+            var encoder = new SevenZip.Compression.LZMA.Encoder();
+            var propIds = new[]
+            {
+                SevenZip.CoderPropID.DictionarySize,
+                SevenZip.CoderPropID.PosStateBits,
+                SevenZip.CoderPropID.LitContextBits,
+                SevenZip.CoderPropID.LitPosBits,
+                SevenZip.CoderPropID.Algorithm,
+                SevenZip.CoderPropID.NumFastBytes,
+                SevenZip.CoderPropID.MatchFinder,
+                SevenZip.CoderPropID.EndMarker
+            };
+            var propValues = new object[]
+            {
+                1 << 16,
+                2,
+                3,
+                0,
+                2,
+                32,
+                "BT4",
+                false
+            };
+            encoder.SetCoderProperties(propIds, propValues);
 
             encoder.WriteCoderProperties(outStream);
             encoder.Code(inStream, outStream, -1, -1, null);

@@ -39,8 +39,11 @@ public sealed class EcbFxRateService(
         try
         {
             var client = httpClientFactory.CreateClient("ecb");
-            var url = options.Value.EcbDailyFxUrl.Trim();
-            using var response = await client.GetAsync(url, ct);
+            var fullUrl = options.Value.EcbDailyFxUrl.Trim();
+            var requestPath = Uri.TryCreate(fullUrl, UriKind.Absolute, out var absolute)
+                ? absolute.PathAndQuery
+                : fullUrl.TrimStart('/');
+            using var response = await client.GetAsync(requestPath, ct);
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogWarning("ECB FX returned {StatusCode}", (int)response.StatusCode);
