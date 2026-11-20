@@ -18,6 +18,8 @@ public sealed class PaymentImportService(
     IAuditLogService audit,
     IFioBankService fio) : IPaymentImportService
 {
+    private const decimal AmountTolerance = 0.05m;
+
     private static readonly string[] VsHeaders =
     [
         "vs", "variabilnysymbol", "variabilny", "variablesymbol", "reference", "poznamka", "sprava"
@@ -117,12 +119,70 @@ public sealed class PaymentImportService(
                 "At least one row is required.",
                 ErrorCodes.BadRequest);
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        var invoiceIds = request.Rows.Select(r => r.InvoiceId).Distinct().ToList();
+        var invoicesById = await db.Invoices.AsNoTracking()
+            .Where(i => i.CompanyId == companyId && invoiceIds.Contains(i.Id))
+            .Select(i => new
+            {
+                i.Id,
+                i.VariableSymbol,
+                i.Total,
+                i.Status,
+                i.Flow
+            })
+            .ToDictionaryAsync(i => i.Id, ct);
+
         var results = new List<PaymentImportConfirmResult>();
         var marked = 0;
         var failed = 0;
 
         foreach (var row in request.Rows)
         {
+            if (!invoicesById.TryGetValue(row.InvoiceId, out var inv))
+            {
+                failed++;
+                results.Add(new PaymentImportConfirmResult(
+                    row.InvoiceId, false, "Invoice not found for this company."));
+                continue;
+            }
+
+            if (inv.Flow != DocumentFlow.Issued)
+            {
+                failed++;
+                results.Add(new PaymentImportConfirmResult(
+                    row.InvoiceId, false, "Only issued-flow invoices can be marked paid via import."));
+                continue;
+            }
+
+            if (inv.Status is not (InvoiceStatus.Issued or InvoiceStatus.Overdue))
+            {
+                failed++;
+                results.Add(new PaymentImportConfirmResult(
+                    row.InvoiceId, false, $"Invoice status {inv.Status} cannot be marked paid."));
+                continue;
+            }
+
+            var expectedVs = PaymentImportMatcher.DigitsOnly(row.VariableSymbol ?? "");
+            var invoiceVs = PaymentImportMatcher.DigitsOnly(inv.VariableSymbol ?? "");
+            if (string.IsNullOrWhiteSpace(expectedVs) || expectedVs != invoiceVs)
+            {
+                failed++;
+                results.Add(new PaymentImportConfirmResult(
+                    row.InvoiceId, false, "Variable symbol does not match the invoice."));
+                continue;
+            }
+
+            if (row.Amount.HasValue && Math.Abs(row.Amount.Value - inv.Total) > AmountTolerance)
+            {
+                failed++;
+                results.Add(new PaymentImportConfirmResult(
+                    row.InvoiceId,
+                    false,
+                    $"Amount does not match (payment {row.Amount.Value:0.00} vs invoice {inv.Total:0.00})."));
+                continue;
+            }
+
             DateOnly? paidAt = null;
             if (!string.IsNullOrWhiteSpace(row.PaidAt) &&
                 DateOnly.TryParse(row.PaidAt, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
@@ -150,7 +210,6 @@ public sealed class PaymentImportService(
             }
         }
 
-        var companyId = await tenant.GetCompanyIdAsync(ct);
         await audit.WriteAsync(
             AuditAction.PaymentImportApplied,
             "PaymentImport",

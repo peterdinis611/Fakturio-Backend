@@ -201,8 +201,23 @@ public sealed class AdminRaService(
             company.Country = country;
         }
 
+        if (request.IcDph is not null)
+            company.IcDph = string.IsNullOrWhiteSpace(request.IcDph)
+                ? null
+                : request.IcDph.Trim().ToUpperInvariant();
+
         if (request.IsVatPayer is not null)
             company.IsVatPayer = request.IsVatPayer.Value;
+
+        if (company.IsVatPayer && string.IsNullOrWhiteSpace(company.IcDph))
+        {
+            return ServiceResult<AdminRaCompanyDto>.BadRequest(
+                "IČ DPH je povinné pri platcovi DPH. Doplň IČ DPH pred zapnutím režimu.",
+                ErrorCodes.BadRequest);
+        }
+
+        if (!company.IsVatPayer)
+            company.DefaultVatRate = 0m;
 
         company.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);

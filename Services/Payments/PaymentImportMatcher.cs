@@ -22,11 +22,13 @@ internal static class PaymentImportMatcher
         IReadOnlyList<PaymentImportSourceRow> sourceRows,
         CancellationToken ct)
     {
+        // Only issued-flow sales docs — never match received expenses.
         var openInvoices = await db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId)
             .Where(i =>
-                i.Status == InvoiceStatus.Issued ||
-                i.Status == InvoiceStatus.Overdue ||
-                i.Status == InvoiceStatus.Paid)
+                i.Flow == DocumentFlow.Issued &&
+                (i.Status == InvoiceStatus.Issued ||
+                 i.Status == InvoiceStatus.Overdue ||
+                 i.Status == InvoiceStatus.Paid))
             .Select(i => new
             {
                 i.Id,
@@ -97,14 +99,20 @@ internal static class PaymentImportMatcher
                 continue;
             }
 
-            matched++;
-            var message = source.Amount.HasValue && Math.Abs(source.Amount.Value - inv.Total) > 0.05m
-                ? $"Amount differs (CSV {source.Amount.Value:0.00} vs invoice {inv.Total:0.00})."
-                : null;
+            if (source.Amount.HasValue && Math.Abs(source.Amount.Value - inv.Total) > 0.05m)
+            {
+                unmatched++;
+                rows.Add(new PaymentImportRowResult(
+                    source.LineNumber, rawVs, normalized, source.Amount, source.BookingDate, source.Counterparty, source.Note,
+                    "unmatched", inv.Id, inv.Number, inv.Total, inv.Currency,
+                    $"Amount differs (CSV {source.Amount.Value:0.00} vs invoice {inv.Total:0.00})."));
+                continue;
+            }
 
+            matched++;
             rows.Add(new PaymentImportRowResult(
                 source.LineNumber, rawVs, normalized, source.Amount, source.BookingDate, source.Counterparty, source.Note,
-                "matched", inv.Id, inv.Number, inv.Total, inv.Currency, message));
+                "matched", inv.Id, inv.Number, inv.Total, inv.Currency, null));
         }
 
         return new PaymentImportPreviewResponse(

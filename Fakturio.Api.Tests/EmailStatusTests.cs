@@ -28,6 +28,7 @@ public sealed class EmailStatusTests
         Assert.NotNull(status);
         Assert.True(status.Configured);
         Assert.Equal("Virtual", status.Provider);
+        Assert.True(status.Simulated);
     }
 
     [Fact]

@@ -251,7 +251,21 @@ public static class DependencyInjection
         services.AddSingleton<IEmailSender>(sp =>
         {
             var opts = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<EmailOptions>>().Value;
-            return opts.Provider.Trim().ToLowerInvariant() switch
+            var env = sp.GetRequiredService<IHostEnvironment>();
+            var provider = opts.Provider.Trim().ToLowerInvariant();
+
+            // Virtual/Log must never look like real delivery in production.
+            if (env.IsProduction() && provider is "virtual" or "log")
+            {
+                sp.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("Email")
+                    .LogError(
+                        "Email:Provider={Provider} is not allowed in Production — falling back to None.",
+                        opts.Provider);
+                return sp.GetRequiredService<NullEmailSender>();
+            }
+
+            return provider switch
             {
                 "smtp" => sp.GetRequiredService<SmtpEmailSender>(),
                 "resend" => sp.GetRequiredService<ResendEmailSender>(),

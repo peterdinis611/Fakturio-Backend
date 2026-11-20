@@ -43,7 +43,8 @@ public record AdminRaUpdateCompanyRequest(
     string? Email,
     string? City,
     string? Country,
-    bool? IsVatPayer
+    bool? IsVatPayer,
+    string? IcDph = null
 );
 
 public record AdminRaInvoiceDto(

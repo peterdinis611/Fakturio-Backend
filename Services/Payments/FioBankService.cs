@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Fakturio.Api.Services.Payments;
 
-public sealed class FioBankService(
+public sealed partial class FioBankService(
     AppDbContext db,
     ITenantContext tenant,
     IHttpClientFactory httpClientFactory,
@@ -119,53 +119,4 @@ public sealed class FioBankService(
         return items;
     }
 
-    private static PaymentImportSourceRow MapTransaction(JsonElement tx, int lineNumber)
-    {
-        var vs = GetColumnValue(tx, 22);
-        var amountRaw = GetColumnValue(tx, 1);
-        var dateRaw = GetColumnValue(tx, 0);
-        var counterparty = FirstNonEmpty(
-            GetColumnValue(tx, 10),
-            GetColumnValue(tx, 7));
-        var note = GetColumnValue(tx, 25);
-
-        return new PaymentImportSourceRow(
-            lineNumber,
-            vs,
-            PaymentImportMatcher.ParseAmount(amountRaw),
-            PaymentImportMatcher.ParseDate(dateRaw),
-            counterparty,
-            note);
-    }
-
-    private static string? GetColumnValue(JsonElement tx, int columnId)
-    {
-        var key = $"column{columnId}";
-        if (!tx.TryGetProperty(key, out var column))
-            return null;
-
-        if (column.ValueKind == JsonValueKind.Object && column.TryGetProperty("value", out var value))
-        {
-            return value.ValueKind switch
-            {
-                JsonValueKind.String => value.GetString(),
-                JsonValueKind.Number => value.GetRawText(),
-                JsonValueKind.Null => null,
-                _ => value.ToString()
-            };
-        }
-
-        return column.ValueKind == JsonValueKind.String ? column.GetString() : column.ToString();
-    }
-
-    private static string? FirstNonEmpty(params string?[] values)
-    {
-        foreach (var value in values)
-        {
-            if (!string.IsNullOrWhiteSpace(value))
-                return value.Trim();
-        }
-
-        return null;
-    }
 }

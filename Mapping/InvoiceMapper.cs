@@ -184,6 +184,39 @@ public static class InvoiceMapper
         invoice.SellerCountry = company.Country;
     }
 
+    /// <summary>
+    /// Received (expense) docs: supplier is the seller, our company is the buyer (customer fields).
+    /// UI still picks the counterparty via CustomerId; we remap snapshots for PDF/legal roles.
+    /// </summary>
+    public static void ApplyReceivedPartySnapshots(
+        Invoice invoice,
+        CompanySettings? company,
+        Customer supplier)
+    {
+        invoice.SellerName = supplier.Name;
+        invoice.SellerIco = supplier.Ico;
+        invoice.SellerDic = supplier.Dic;
+        invoice.SellerIsVatPayer = !string.IsNullOrWhiteSpace(supplier.IcDph);
+        invoice.SellerIcDph = supplier.IcDph;
+        invoice.SellerStreet = supplier.Street;
+        invoice.SellerCity = supplier.City;
+        invoice.SellerPostalCode = supplier.PostalCode;
+        invoice.SellerCountry = supplier.Country;
+
+        if (company is null || string.IsNullOrWhiteSpace(company.Name))
+            return;
+
+        invoice.CustomerName = company.Name;
+        invoice.CustomerIco = company.Ico;
+        invoice.CustomerDic = company.Dic;
+        invoice.CustomerIcDph = company.IsVatPayer ? company.IcDph : null;
+        invoice.CustomerEmail = company.Email;
+        invoice.CustomerStreet = company.Street;
+        invoice.CustomerCity = company.City;
+        invoice.CustomerPostalCode = company.PostalCode;
+        invoice.CustomerCountry = company.Country;
+    }
+
     public static void ReplaceItems(
         Invoice invoice,
         IReadOnlyList<CreateInvoiceItemRequest> items,

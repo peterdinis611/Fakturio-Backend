@@ -8,7 +8,9 @@ public record PaymentImportConfirmRequest(
 
 public record PaymentImportConfirmRow(
     Guid InvoiceId,
-    string? PaidAt
+    string? PaidAt,
+    string? VariableSymbol = null,
+    decimal? Amount = null
 );
 
 public record PaymentImportPreviewResponse(

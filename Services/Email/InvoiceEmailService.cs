@@ -23,13 +23,20 @@ public sealed class InvoiceEmailService(
 {
     private readonly EmailOptions _options = options.Value;
 
-    public EmailStatusResponse GetStatus() =>
-        new(
+    public EmailStatusResponse GetStatus()
+    {
+        var simulated = string.Equals(
+            emailSender.ProviderName,
+            "Virtual",
+            StringComparison.OrdinalIgnoreCase);
+        return new(
             emailSender.IsConfigured,
             emailSender.ProviderName,
             string.IsNullOrWhiteSpace(_options.FromAddress) ? null : _options.FromAddress,
             string.IsNullOrWhiteSpace(_options.FromName) ? null : _options.FromName,
-            !string.IsNullOrWhiteSpace(_options.PublicAppBaseUrl));
+            !string.IsNullOrWhiteSpace(_options.PublicAppBaseUrl),
+            simulated);
+    }
 
     public async Task<ServiceResult<SendTestEmailResponse>> SendTestAsync(
         SendTestEmailRequest request,
@@ -173,11 +180,14 @@ public sealed class InvoiceEmailService(
             "Invoice",
             invoice.Id,
             invoice.Number,
-            $"Doklad {invoice.Number} odoslaný e-mailom na {to.Trim()}.",
+            string.Equals(emailSender.ProviderName, "Virtual", StringComparison.OrdinalIgnoreCase)
+                ? $"Doklad {invoice.Number} — simulované odoslanie (Virtual) na {to.Trim()}."
+                : $"Doklad {invoice.Number} odoslaný e-mailom na {to.Trim()}.",
             new
             {
                 to = to.Trim(),
                 provider = emailSender.ProviderName,
+                simulated = string.Equals(emailSender.ProviderName, "Virtual", StringComparison.OrdinalIgnoreCase),
                 pdfAttached,
                 publicLink = publicUrl is not null,
             },

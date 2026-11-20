@@ -328,7 +328,10 @@ public class ReportService(AppDbContext db, ITenantContext tenant) : IReportServ
     {
         var companyId = await tenant.GetCompanyIdAsync(ct);
         IQueryable<Invoice> query = db.Invoices.AsNoTracking()
-            .Where(i => i.CompanyId == companyId && InvoiceMapper.RevenueDocumentTypes.Contains(i.DocumentType));
+            .Where(i =>
+                i.CompanyId == companyId
+                && i.Flow == DocumentFlow.Issued
+                && InvoiceMapper.RevenueDocumentTypes.Contains(i.DocumentType));
         if (includeItems)
             query = query.Include(i => i.Items);
 

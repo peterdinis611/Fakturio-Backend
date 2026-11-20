@@ -5,7 +5,8 @@ public record EmailStatusResponse(
     string Provider,
     string? FromAddress,
     string? FromName,
-    bool HasPublicAppBaseUrl);
+    bool HasPublicAppBaseUrl,
+    bool Simulated = false);
 
 public record SendTestEmailRequest(string? To);
 

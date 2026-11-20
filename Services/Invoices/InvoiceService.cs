@@ -196,8 +196,13 @@ public class InvoiceService(
             PaidAt = status == InvoiceStatus.Paid ? issueDate : null
         };
 
-        InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
-        InvoiceMapper.ApplySellerSnapshot(invoice, company);
+        if (flow == DocumentFlow.Received)
+            InvoiceMapper.ApplyReceivedPartySnapshots(invoice, company, customer);
+        else
+        {
+            InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
+            InvoiceMapper.ApplySellerSnapshot(invoice, company);
+        }
         InvoiceMapper.ReplaceItems(invoice, request.Items!, defaultVat, forceZeroVat: !isVatPayer);
         InvoiceCalculator.RecalculateTotals(invoice);
 
@@ -205,7 +210,24 @@ public class InvoiceService(
             return Fail<InvoiceResponse>(totalError);
 
         db.Invoices.Add(invoice);
-        await SaveAndInvalidateAsync(ct);
+        try
+        {
+            await SaveAndInvalidateAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsUniqueConstraint(ex))
+        {
+            // Concurrent issue of the same prefix/year — allocate next number and retry once.
+            invoice.Number = await numbers.NextAsync(
+                companyId,
+                documentType,
+                company?.InvoicePrefix,
+                company?.ProformaPrefix,
+                company?.CreditNotePrefix,
+                ct,
+                flow);
+            invoice.VariableSymbol = request.VariableSymbol ?? DigitsOnly(invoice.Number);
+            await SaveAndInvalidateAsync(ct);
+        }
 
         await audit.WriteAsync(
             AuditAction.Created,
@@ -278,8 +300,13 @@ public class InvoiceService(
         invoice.BankBic = request.BankBic?.Trim().ToUpperInvariant() ?? invoice.BankBic;
         invoice.Notes = request.Notes?.Trim();
 
-        InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
-        InvoiceMapper.ApplySellerSnapshot(invoice, company);
+        if (invoice.Flow == DocumentFlow.Received)
+            InvoiceMapper.ApplyReceivedPartySnapshots(invoice, company, customer);
+        else
+        {
+            InvoiceMapper.ApplyCustomerSnapshot(invoice, customer);
+            InvoiceMapper.ApplySellerSnapshot(invoice, company);
+        }
         var isVatPayer = company?.IsVatPayer ?? invoice.SellerIsVatPayer;
         var defaultVat = isVatPayer ? company?.DefaultVatRate ?? 23m : 0m;
         InvoiceMapper.ReplaceItems(invoice, request.Items!, defaultVat, forceZeroVat: !isVatPayer);
@@ -934,6 +961,14 @@ public class InvoiceService(
     {
         await db.SaveChangesAsync(ct);
         await cache.InvalidateReportsAsync(ct);
+    }
+
+    private static bool IsUniqueConstraint(DbUpdateException ex)
+    {
+        var msg = ex.InnerException?.Message ?? ex.Message;
+        return msg.Contains("UNIQUE", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("unique", StringComparison.Ordinal)
+            || msg.Contains("IX_Invoices_CompanyId_Number", StringComparison.OrdinalIgnoreCase);
     }
 
     private static ServiceResult<T> Fail<T>(ServiceResult error) =>

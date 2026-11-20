@@ -27,6 +27,9 @@ public sealed class PaymentImportConfirmRequestValidator
         RuleForEach(x => x.Rows).ChildRules(row =>
         {
             row.RuleFor(r => r.InvoiceId).NotEmpty();
+            row.RuleFor(r => r.VariableSymbol)
+                .NotEmpty()
+                .WithMessage("Variable symbol is required to confirm a match.");
         });
     }
 }
