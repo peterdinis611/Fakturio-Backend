@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System.Threading.RateLimiting;
 using Fakturio.Api.Configuration;
 using Microsoft.AspNetCore.RateLimiting;
@@ -7,8 +8,10 @@ namespace Fakturio.Api.Extensions;
 public static class RateLimitingExtensions
 {
     public const string AuthPolicy = "auth";
+    public const string ApiPolicy = "api";
     public const string PublicPolicy = "public";
     public const string IntegrationsPolicy = "integrations";
+    public const string PasswordPolicy = "password";
 
     public static IServiceCollection AddFakturioRateLimiting(
         this IServiceCollection services,
@@ -29,6 +32,13 @@ public static class RateLimitingExtensions
                 if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
                     response.Headers.RetryAfter = ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
 
+                var policy = ResolvePolicyName(context.HttpContext);
+                if (policy is not null && TryGetPermitLimit(opts, policy, out var limit))
+                {
+                    response.Headers["X-RateLimit-Limit"] = limit.ToString();
+                    response.Headers["X-RateLimit-Remaining"] = "0";
+                }
+
                 await response.WriteAsJsonAsync(
                     new
                     {
@@ -47,52 +57,102 @@ public static class RateLimitingExtensions
                 options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
                     RateLimitPartition.GetNoLimiter("off"));
                 options.AddPolicy(AuthPolicy, _ => RateLimitPartition.GetNoLimiter("off-auth"));
+                options.AddPolicy(ApiPolicy, _ => RateLimitPartition.GetNoLimiter("off-api"));
                 options.AddPolicy(PublicPolicy, _ => RateLimitPartition.GetNoLimiter("off-public"));
                 options.AddPolicy(IntegrationsPolicy, _ => RateLimitPartition.GetNoLimiter("off-integrations"));
+                options.AddPolicy(PasswordPolicy, _ => RateLimitPartition.GetNoLimiter("off-password"));
                 return;
             }
 
             options.AddPolicy(AuthPolicy, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: $"auth:{GetClientKey(httpContext)}",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = Math.Max(1, opts.AuthPermitLimit),
-                        Window = TimeSpan.FromSeconds(Math.Max(1, opts.AuthWindowSeconds)),
-                        QueueLimit = 0,
-                        AutoReplenishment = true,
-                    }));
+                SlidingPartition(
+                    $"auth:{GetPartitionKey(httpContext)}",
+                    Math.Max(1, opts.AuthPermitLimit),
+                    Math.Max(1, opts.AuthWindowSeconds)));
+
+            options.AddPolicy(ApiPolicy, httpContext =>
+                SlidingPartition(
+                    $"api:{GetPartitionKey(httpContext)}",
+                    Math.Max(1, opts.ApiPermitLimit),
+                    Math.Max(1, opts.ApiWindowSeconds)));
 
             options.AddPolicy(PublicPolicy, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: $"public:{GetClientKey(httpContext)}",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = Math.Max(1, opts.PublicPermitLimit),
-                        Window = TimeSpan.FromSeconds(Math.Max(1, opts.PublicWindowSeconds)),
-                        QueueLimit = 0,
-                        AutoReplenishment = true,
-                    }));
+                SlidingPartition(
+                    $"public:{GetClientIp(httpContext)}",
+                    Math.Max(1, opts.PublicPermitLimit),
+                    Math.Max(1, opts.PublicWindowSeconds)));
 
             options.AddPolicy(IntegrationsPolicy, httpContext =>
-                RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey: $"integrations:{GetClientKey(httpContext)}",
-                    factory: _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = Math.Max(1, opts.IntegrationsPermitLimit),
-                        Window = TimeSpan.FromSeconds(Math.Max(1, opts.IntegrationsWindowSeconds)),
-                        QueueLimit = 0,
-                        AutoReplenishment = true,
-                    }));
+                SlidingPartition(
+                    $"integrations:{GetPartitionKey(httpContext)}",
+                    Math.Max(1, opts.IntegrationsPermitLimit),
+                    Math.Max(1, opts.IntegrationsWindowSeconds)));
+
+            options.AddPolicy(PasswordPolicy, httpContext =>
+                SlidingPartition(
+                    $"password:{GetClientIp(httpContext)}",
+                    Math.Max(1, opts.PasswordPermitLimit),
+                    Math.Max(1, opts.PasswordWindowSeconds)));
         });
 
         return services;
     }
 
+    private static RateLimitPartition<string> SlidingPartition(
+        string partitionKey,
+        int permitLimit,
+        int windowSeconds)
+    {
+        var window = TimeSpan.FromSeconds(windowSeconds);
+        var segments = Math.Clamp(windowSeconds / 10, 2, 12);
+
+        return RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey,
+            _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = window,
+                SegmentsPerWindow = segments,
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            });
+    }
+
     /// <summary>
-    /// Uses RemoteIpAddress only — after UseForwardedHeaders has applied trusted proxies.
-    /// Never read raw X-Forwarded-For (spoofable when the API is exposed directly).
+    /// Authenticated traffic partitions by user id; anonymous by remote IP
+    /// (after UseForwardedHeaders — never raw X-Forwarded-For).
     /// </summary>
-    private static string GetClientKey(HttpContext httpContext) =>
+    public static string GetPartitionKey(HttpContext httpContext)
+    {
+        var sub = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? httpContext.User.FindFirstValue("sub");
+        if (!string.IsNullOrWhiteSpace(sub))
+            return $"user:{sub}";
+
+        return $"ip:{GetClientIp(httpContext)}";
+    }
+
+    public static string GetClientIp(HttpContext httpContext) =>
         httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+    public static string? ResolvePolicyName(HttpContext httpContext)
+    {
+        var endpoint = httpContext.GetEndpoint();
+        var enable = endpoint?.Metadata.GetMetadata<EnableRateLimitingAttribute>();
+        return enable?.PolicyName;
+    }
+
+    public static bool TryGetPermitLimit(RateLimitingOptions opts, string policy, out int limit)
+    {
+        limit = policy switch
+        {
+            AuthPolicy => opts.AuthPermitLimit,
+            ApiPolicy => opts.ApiPermitLimit,
+            PublicPolicy => opts.PublicPermitLimit,
+            IntegrationsPolicy => opts.IntegrationsPermitLimit,
+            PasswordPolicy => opts.PasswordPermitLimit,
+            _ => 0,
+        };
+        return limit > 0;
+    }
 }

@@ -2,6 +2,7 @@ using Fakturio.Api.Configuration;
 using Fakturio.Api.Data;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
@@ -12,6 +13,7 @@ namespace Fakturio.Api.Controllers;
 /// Also reachable via redirect from <c>/health</c>.
 /// </summary>
 [AllowAnonymous]
+[DisableRateLimiting]
 [Route("api/health")]
 public sealed class HealthController(
     AppDbContext db,

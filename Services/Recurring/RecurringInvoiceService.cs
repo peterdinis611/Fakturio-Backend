@@ -256,6 +256,7 @@ public sealed class RecurringInvoiceService(
             .ToListAsync(ct);
 
         var generated = new List<Guid>();
+        var affectedCompanies = new HashSet<Guid>();
         var skipped = 0;
 
         foreach (var template in due)
@@ -284,6 +285,7 @@ public sealed class RecurringInvoiceService(
             }
 
             generated.Add(invoice.Id);
+            affectedCompanies.Add(template.CompanyId);
             template.LastGeneratedOn = today;
             template.LastInvoiceId = invoice.Id;
             template.NextRunOn = Advance(template.NextRunOn, template.DayOfMonth, template.Interval);
@@ -292,6 +294,9 @@ public sealed class RecurringInvoiceService(
 
         if (due.Count > 0)
             await db.SaveChangesAsync(ct);
+
+        foreach (var companyId in affectedCompanies)
+            await cache.InvalidateReportsAsync(companyId, ct);
 
         return new RecurringRunResult(generated.Count, skipped, generated);
     }

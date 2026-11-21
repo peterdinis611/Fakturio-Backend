@@ -1,10 +1,13 @@
 using Fakturio.Api.Common;
+using Fakturio.Api.Extensions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Fakturio.Api.Controllers;
 
 [Authorize]
+[EnableRateLimiting(RateLimitingExtensions.ApiPolicy)]
 [ApiController]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest)]

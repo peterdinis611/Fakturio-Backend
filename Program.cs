@@ -143,10 +143,12 @@ try
     app.UseCors();
     if (!builder.Configuration.GetValue("DisableHttpsRedirection", false))
         app.UseHttpsRedirection();
-    app.UseRateLimiter();
+    // Auth before rate limiter so ApiPolicy can partition by user:{sub}.
     app.UseAuthentication();
     app.UseMiddleware<UserIdLogContextMiddleware>();
     app.UseAuthorization();
+    app.UseRateLimiter();
+    app.UseMiddleware<RateLimitHeadersMiddleware>();
 
     // Public logos only — invoice attachments must go through authenticated download APIs.
     var logosRoot = Path.Combine(app.Environment.ContentRootPath, "uploads", "logos");

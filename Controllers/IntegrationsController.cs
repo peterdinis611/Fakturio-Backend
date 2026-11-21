@@ -255,6 +255,7 @@ public sealed class IntegrationsController(
 
     /// <summary>k-anonymity HIBP check — anonymous so the register flow can call it.</summary>
     [AllowAnonymous]
+    [EnableRateLimiting(RateLimitingExtensions.PasswordPolicy)]
     [HttpPost("password-check")]
     [ProducesResponseType(typeof(PasswordCheckResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<PasswordCheckResponse>> PasswordCheck(
