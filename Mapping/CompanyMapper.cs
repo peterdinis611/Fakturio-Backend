@@ -31,6 +31,8 @@ public static class CompanyMapper
         c.DefaultVatRate,
         c.DefaultCurrency,
         c.InvoicePrefix,
+        c.ProformaPrefix,
+        c.CreditNotePrefix,
         c.DefaultPaymentMethod,
         c.DefaultConstantSymbol,
         c.DefaultInvoiceNotes,
@@ -123,11 +125,15 @@ public static class CompanyMapper
         company.BankBic = Normalize(request.BankBic)?.ToUpperInvariant();
         company.BankName = Normalize(request.BankName);
         company.DefaultDueDays = request.DefaultDueDays ?? company.DefaultDueDays;
-        company.DefaultVatRate = request.DefaultVatRate ?? company.DefaultVatRate;
+        company.DefaultVatRate = company.IsVatPayer
+            ? (request.DefaultVatRate ?? company.DefaultVatRate)
+            : 0m;
         company.DefaultCurrency = string.IsNullOrWhiteSpace(request.DefaultCurrency)
             ? company.DefaultCurrency
             : request.DefaultCurrency.Trim().ToUpperInvariant();
         company.InvoicePrefix = Normalize(request.InvoicePrefix);
+        company.ProformaPrefix = Normalize(request.ProformaPrefix);
+        company.CreditNotePrefix = Normalize(request.CreditNotePrefix);
         company.DefaultPaymentMethod = Normalize(request.DefaultPaymentMethod) ?? company.DefaultPaymentMethod;
         company.DefaultConstantSymbol = Normalize(request.DefaultConstantSymbol);
         company.DefaultInvoiceNotes = Normalize(request.DefaultInvoiceNotes);
@@ -144,11 +150,17 @@ public static class CompanyMapper
         if (request.DefaultDueDays.HasValue)
             company.DefaultDueDays = request.DefaultDueDays.Value;
         if (request.DefaultVatRate.HasValue)
-            company.DefaultVatRate = request.DefaultVatRate.Value;
+            company.DefaultVatRate = company.IsVatPayer ? request.DefaultVatRate.Value : 0m;
+        else if (!company.IsVatPayer)
+            company.DefaultVatRate = 0m;
         if (!string.IsNullOrWhiteSpace(request.DefaultCurrency))
             company.DefaultCurrency = request.DefaultCurrency.Trim().ToUpperInvariant();
         if (request.InvoicePrefix is not null)
             company.InvoicePrefix = Normalize(request.InvoicePrefix);
+        if (request.ProformaPrefix is not null)
+            company.ProformaPrefix = Normalize(request.ProformaPrefix);
+        if (request.CreditNotePrefix is not null)
+            company.CreditNotePrefix = Normalize(request.CreditNotePrefix);
         if (request.DefaultPaymentMethod is not null)
             company.DefaultPaymentMethod = Normalize(request.DefaultPaymentMethod);
         if (request.DefaultConstantSymbol is not null)

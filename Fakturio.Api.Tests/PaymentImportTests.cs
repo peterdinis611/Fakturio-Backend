@@ -47,7 +47,11 @@ public class PaymentImportTests
             "/api/payments/import/confirm",
             new PaymentImportConfirmRequest(
             [
-                new PaymentImportConfirmRow(invoice.Id, DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd")),
+                new PaymentImportConfirmRow(
+                    invoice.Id,
+                    DateOnly.FromDateTime(DateTime.UtcNow).ToString("yyyy-MM-dd"),
+                    invoice.VariableSymbol,
+                    invoice.Total),
             ]));
         Assert.True(confirmRes.IsSuccessStatusCode, await confirmRes.Content.ReadAsStringAsync());
         var confirm = await confirmRes.Content.ReadFromJsonAsync<PaymentImportConfirmResponse>(TestJson.Options);

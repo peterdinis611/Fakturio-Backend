@@ -2,11 +2,20 @@ using Fakturio.Api.Dtos;
 
 namespace Fakturio.Api.Interfaces;
 
-/// <summary>
-/// Dispatches a payment reminder for one invoice (email, SMS, …).
-/// Default implementation logs only until a real channel is wired.
-/// </summary>
+public sealed record ReminderNotifyResult(
+    bool Delivered,
+    bool InAppSent,
+    bool EmailAttempted,
+    bool EmailSent);
+
 public interface IReminderNotifier
 {
-    Task NotifyAsync(InvoiceReminderItemResponse reminder, CancellationToken ct = default);
+    /// <summary>
+    /// Deliver reminder via in-app and/or email.
+    /// <see cref="ReminderNotifyResult.Delivered"/> is true only when at least one
+    /// configured channel succeeded (and email succeeded if email was required).
+    /// </summary>
+    Task<ReminderNotifyResult> NotifyAsync(
+        InvoiceReminderItemResponse reminder,
+        CancellationToken ct = default);
 }

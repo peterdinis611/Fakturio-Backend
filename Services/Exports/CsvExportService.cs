@@ -158,6 +158,59 @@ public class CsvExportService(
             "application/xml; charset=utf-8"));
     }
 
+    public async Task<ServiceResult<ExportFile>> ExportExpensesCsvAsync(
+        DateOnly? from,
+        DateOnly? to,
+        InvoiceStatus? status,
+        CancellationToken ct = default)
+    {
+        if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
+            return Fail(rangeError);
+
+        var invoices = await (await QueryInvoicesAsync(from, to, status, ct, DocumentFlow.Received))
+            .Include(i => i.Items)
+            .OrderBy(i => i.IssueDate)
+            .ThenBy(i => i.Number)
+            .ToListAsync(ct);
+
+        await WriteExportAsync("expenses-csv", from, to, invoices.Count, ct);
+
+        var sb = new StringBuilder();
+        sb.AppendLine(string.Join(';',
+            "Cislo", "Typ_dokladu", "Stav", "Rezim_DPH",
+            "Datum_vystavenia", "Datum_dodania", "Datum_splatnosti", "Datum_uhrady",
+            "Dodavatel", "ICO_dodavatel", "DIC_dodavatel", "ICDPH_dodavatel",
+            "Odberatel", "ICO_odberatel", "VS", "Mena", "Zaklad", "DPH", "Celkom", "Poznamka"));
+
+        foreach (var i in invoices)
+        {
+            sb.AppendLine(string.Join(';',
+                Csv(i.Number),
+                Csv(InvoiceLegalTexts.DocumentTypeCode(i.DocumentType)),
+                Csv(i.Status.ToString()),
+                Csv(InvoiceLegalTexts.VatRegimeLabel(i)),
+                Csv(i.IssueDate.ToString("yyyy-MM-dd", Inv)),
+                Csv((i.DeliveryDate ?? i.IssueDate).ToString("yyyy-MM-dd", Inv)),
+                Csv(i.DueDate.ToString("yyyy-MM-dd", Inv)),
+                Csv(i.PaidAt?.ToString("yyyy-MM-dd", Inv) ?? ""),
+                Csv(i.SellerName ?? ""),
+                Csv(i.SellerIco ?? ""),
+                Csv(i.SellerDic ?? ""),
+                Csv(i.SellerIcDph ?? ""),
+                Csv(i.CustomerName),
+                Csv(i.CustomerIco ?? ""),
+                Csv(i.VariableSymbol ?? ""),
+                Csv(i.Currency),
+                Decimal(i.Subtotal),
+                Decimal(i.VatTotal),
+                Decimal(i.Total),
+                Csv(i.Notes ?? "")));
+        }
+
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd", Inv);
+        return OkCsv(sb.ToString(), $"naklady-{stamp}.csv");
+    }
+
     public async Task<ServiceResult<ExportFile>> ExportAccountantPackAsync(
         DateOnly? from,
         DateOnly? to,
@@ -208,10 +261,16 @@ public class CsvExportService(
             "application/zip"));
     }
 
-    private async Task<IQueryable<Invoice>> QueryInvoicesAsync(DateOnly? from, DateOnly? to, InvoiceStatus? status, CancellationToken ct)
+    private async Task<IQueryable<Invoice>> QueryInvoicesAsync(
+        DateOnly? from,
+        DateOnly? to,
+        InvoiceStatus? status,
+        CancellationToken ct,
+        DocumentFlow flow = DocumentFlow.Issued)
     {
         var companyId = await tenant.GetCompanyIdAsync(ct);
-        var query = db.Invoices.AsNoTracking().Where(i => i.CompanyId == companyId);
+        var query = db.Invoices.AsNoTracking()
+            .Where(i => i.CompanyId == companyId && i.Flow == flow);
         if (from.HasValue)
             query = query.Where(i => i.IssueDate >= from.Value);
         if (to.HasValue)
@@ -221,9 +280,13 @@ public class CsvExportService(
         return query;
     }
 
-    private async Task<IQueryable<Invoice>> QueryPostedAsync(DateOnly? from, DateOnly? to, CancellationToken ct)
+    private async Task<IQueryable<Invoice>> QueryPostedAsync(
+        DateOnly? from,
+        DateOnly? to,
+        CancellationToken ct,
+        DocumentFlow flow = DocumentFlow.Issued)
     {
-        var query = await QueryInvoicesAsync(from, to, null, ct);
+        var query = await QueryInvoicesAsync(from, to, null, ct, flow);
         return query.Where(i => i.Status == InvoiceStatus.Issued
             || i.Status == InvoiceStatus.Paid
             || i.Status == InvoiceStatus.Overdue

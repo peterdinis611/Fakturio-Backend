@@ -3,23 +3,21 @@ using Fakturio.Api.Interfaces;
 
 namespace Fakturio.Api.Services.Reminders;
 
-/// <summary>
-/// Placeholder notifier — logs candidates. Replace with email/SMTP when ready.
-/// </summary>
 public sealed class LoggingReminderNotifier(ILogger<LoggingReminderNotifier> logger) : IReminderNotifier
 {
-    public Task NotifyAsync(InvoiceReminderItemResponse reminder, CancellationToken ct = default)
+    public Task<ReminderNotifyResult> NotifyAsync(
+        InvoiceReminderItemResponse reminder,
+        CancellationToken ct = default)
     {
         logger.LogInformation(
-            "Reminder candidate {Number} → {Customer} ({Email}); due {DueDate}; overdue={Overdue}; daysUntilDue={Days}; priorCount={Count}",
+            "Reminder (log-only) for {Number} · {Customer} · overdue={Overdue}",
             reminder.Number,
             reminder.CustomerName,
-            reminder.CustomerEmail ?? "—",
-            reminder.DueDate,
-            reminder.IsOverdue,
-            reminder.DaysUntilDue,
-            reminder.ReminderCount);
-
-        return Task.CompletedTask;
+            reminder.IsOverdue);
+        return Task.FromResult(new ReminderNotifyResult(
+            Delivered: true,
+            InAppSent: true,
+            EmailAttempted: false,
+            EmailSent: false));
     }
 }

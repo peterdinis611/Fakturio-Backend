@@ -14,17 +14,19 @@ public sealed class SignalHubReminderNotifier(
     IInvoiceEmailService emails,
     ILogger<SignalHubReminderNotifier> logger) : IReminderNotifier
 {
-    public async Task NotifyAsync(InvoiceReminderItemResponse reminder, CancellationToken ct = default)
+    public async Task<ReminderNotifyResult> NotifyAsync(
+        InvoiceReminderItemResponse reminder,
+        CancellationToken ct = default)
     {
         var invoice = await db.Invoices.AsNoTracking()
             .FirstOrDefaultAsync(i => i.Id == reminder.Id, ct);
         if (invoice is null)
-            return;
+            return new ReminderNotifyResult(false, false, false, false);
 
         var company = await db.CompanySettings.AsNoTracking()
             .FirstOrDefaultAsync(c => c.Id == invoice.CompanyId, ct);
         if (company is null)
-            return;
+            return new ReminderNotifyResult(false, false, false, false);
 
         var prefs = await db.NotificationPreferences.AsNoTracking()
             .FirstOrDefaultAsync(p => p.UserId == company.UserId, ct);
@@ -34,7 +36,7 @@ public sealed class SignalHubReminderNotifier(
             logger.LogDebug(
                 "Reminder skipped for {Number}: user disabled reminders.",
                 reminder.Number);
-            return;
+            return new ReminderNotifyResult(false, false, false, false);
         }
 
         if (prefs is not null && prefs.OnlyOverdue && !reminder.IsOverdue)
@@ -42,7 +44,7 @@ public sealed class SignalHubReminderNotifier(
             logger.LogDebug(
                 "Reminder skipped for {Number}: only-overdue preference.",
                 reminder.Number);
-            return;
+            return new ReminderNotifyResult(false, false, false, false);
         }
 
         if (prefs is not null && !prefs.OnlyOverdue && !reminder.IsOverdue
@@ -52,7 +54,7 @@ public sealed class SignalHubReminderNotifier(
                 "Reminder skipped for {Number}: outside withinDays={WithinDays}.",
                 reminder.Number,
                 prefs.WithinDays);
-            return;
+            return new ReminderNotifyResult(false, false, false, false);
         }
 
         var title = reminder.IsOverdue
@@ -67,6 +69,7 @@ public sealed class SignalHubReminderNotifier(
                 ? ""
                 : $" · {reminder.CustomerEmail}");
 
+        var inAppSent = false;
         var inAppAllowed = prefs is null || prefs.InAppEnabled;
         if (inAppAllowed)
         {
@@ -80,7 +83,8 @@ public sealed class SignalHubReminderNotifier(
                 reminder.Number,
                 ct);
 
-            if (published is not null)
+            inAppSent = published is not null;
+            if (inAppSent)
             {
                 logger.LogInformation(
                     "In-app reminder queued for {Number} → user {UserId}",
@@ -89,14 +93,16 @@ public sealed class SignalHubReminderNotifier(
             }
         }
 
-        if (prefs?.EmailEnabled == true)
+        var emailRequired = prefs?.EmailEnabled == true;
+        var emailSent = false;
+        if (emailRequired)
         {
-            var sent = await emails.TrySendReminderAsync(
+            emailSent = await emails.TrySendReminderAsync(
                 reminder,
                 company.Id,
                 company.UserId,
                 ct);
-            if (sent)
+            if (emailSent)
             {
                 logger.LogInformation(
                     "Email reminder sent for {Number} → {Email}",
@@ -111,5 +117,16 @@ public sealed class SignalHubReminderNotifier(
                     reminder.CustomerEmail ?? "—");
             }
         }
+
+        // Delivered only when required channels succeed.
+        var delivered = emailRequired
+            ? emailSent && (inAppSent || !inAppAllowed)
+            : inAppSent;
+
+        // If email was required and failed, never treat as delivered (blocks MarkAsSent).
+        if (emailRequired && !emailSent)
+            delivered = false;
+
+        return new ReminderNotifyResult(delivered, inAppSent, emailRequired, emailSent);
     }
 }

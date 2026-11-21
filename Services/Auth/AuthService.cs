@@ -17,7 +17,8 @@ public sealed class AuthService(
     IPasswordHasher<AppUser> passwordHasher,
     IAuditLogService audit,
     ITurnstileVerifier turnstile,
-    IHttpContextAccessor httpContextAccessor) : IAuthService
+    IHttpContextAccessor httpContextAccessor,
+    IHostEnvironment environment) : IAuthService
 {
     public async Task<ServiceResult<AuthResponse>> RegisterAsync(
         RegisterRequest request,
@@ -78,6 +79,22 @@ public sealed class AuthService(
             return ServiceResult<AuthResponse>.BadRequest(
                 "E-mail a heslo sú povinné.",
                 ErrorCodes.BadRequest);
+
+        if (!environment.IsDevelopment()
+            && string.Equals(email, DemoDataSeeder.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            return ServiceResult<AuthResponse>.Unauthorized(
+                "Neplatný e-mail alebo heslo.",
+                ErrorCodes.Unauthorized);
+        }
+
+        var remoteIp = httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString();
+        if (!await turnstile.VerifyAsync(request.TurnstileToken, remoteIp, ct))
+        {
+            return ServiceResult<AuthResponse>.BadRequest(
+                "Overenie captcha zlyhalo. Skús to znova.",
+                ErrorCodes.BadRequest);
+        }
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
         if (user is null)

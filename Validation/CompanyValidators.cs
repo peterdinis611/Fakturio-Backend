@@ -98,6 +98,16 @@ public class UpdateCompanySettingsRequestValidator : AbstractValidator<UpdateCom
             .Matches(@"^[A-Za-z0-9\-]*$")
             .When(x => !string.IsNullOrWhiteSpace(x.InvoicePrefix));
 
+        RuleFor(x => x.ProformaPrefix)
+            .MaximumLength(20)
+            .Matches(@"^[A-Za-z0-9\-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.ProformaPrefix));
+
+        RuleFor(x => x.CreditNotePrefix)
+            .MaximumLength(20)
+            .Matches(@"^[A-Za-z0-9\-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.CreditNotePrefix));
+
         RuleFor(x => x.DefaultPaymentMethod)
             .Must(m => m is null || AllowedPaymentMethods.Contains(m))
             .WithMessage("Payment method must be bank_transfer, cash, card, or other.");
@@ -151,6 +161,16 @@ public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCom
             .Matches(@"^[A-Za-z0-9\-]*$")
             .When(x => !string.IsNullOrWhiteSpace(x.InvoicePrefix));
 
+        RuleFor(x => x.ProformaPrefix)
+            .MaximumLength(20)
+            .Matches(@"^[A-Za-z0-9\-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.ProformaPrefix));
+
+        RuleFor(x => x.CreditNotePrefix)
+            .MaximumLength(20)
+            .Matches(@"^[A-Za-z0-9\-]*$")
+            .When(x => !string.IsNullOrWhiteSpace(x.CreditNotePrefix));
+
         RuleFor(x => x.DefaultPaymentMethod)
             .Must(m => m is null || AllowedPaymentMethods.Contains(m));
 
@@ -174,6 +194,8 @@ public class UpdateCompanyDefaultsRequestValidator : AbstractValidator<UpdateCom
         || x.DefaultVatRate.HasValue
         || x.DefaultCurrency is not null
         || x.InvoicePrefix is not null
+        || x.ProformaPrefix is not null
+        || x.CreditNotePrefix is not null
         || x.DefaultPaymentMethod is not null
         || x.DefaultConstantSymbol is not null
         || x.DefaultInvoiceNotes is not null

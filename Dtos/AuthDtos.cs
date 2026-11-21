@@ -10,7 +10,8 @@ public record RegisterRequest(
 
 public record LoginRequest(
     string Email,
-    string Password
+    string Password,
+    string? TurnstileToken = null
 );
 
 public record AuthResponse(

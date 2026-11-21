@@ -26,6 +26,13 @@ public interface IExportService
         DateOnly? from,
         DateOnly? to,
         CancellationToken ct = default);
+
+    /// <summary>Received-flow (expense) documents CSV for the period.</summary>
+    Task<ServiceResult<ExportFile>> ExportExpensesCsvAsync(
+        DateOnly? from,
+        DateOnly? to,
+        InvoiceStatus? status,
+        CancellationToken ct = default);
 }
 
 public record ExportFile(

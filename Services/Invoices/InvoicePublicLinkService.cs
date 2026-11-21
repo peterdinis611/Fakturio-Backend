@@ -54,7 +54,8 @@ public sealed class InvoicePublicLinkService(
         else
         {
             invoice.PublicLinkEnabled = false;
-            // Keep token so re-enable restores the same URL; clear only if you prefer rotate-on-disable.
+            // Rotate on disable so a leaked URL cannot be re-enabled with the same token.
+            invoice.PublicAccessToken = null;
         }
 
         invoice.UpdatedAt = DateTime.UtcNow;

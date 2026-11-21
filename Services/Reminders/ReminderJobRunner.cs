@@ -62,7 +62,18 @@ public sealed class ReminderJobRunner(
                 ct.ThrowIfCancellationRequested();
                 try
                 {
-                    await notifier.NotifyAsync(item, ct);
+                    var result = await notifier.NotifyAsync(item, ct);
+                    if (!result.Delivered)
+                    {
+                        failed++;
+                        logger.LogWarning(
+                            "Reminder not fully delivered for {Number} (inApp={InApp}, emailAttempted={EmailAttempted}, emailSent={EmailSent}).",
+                            item.Number,
+                            result.InAppSent,
+                            result.EmailAttempted,
+                            result.EmailSent);
+                        continue;
+                    }
 
                     if (options.MarkAsSent)
                     {
@@ -71,7 +82,7 @@ public sealed class ReminderJobRunner(
                         {
                             failed++;
                             logger.LogWarning(
-                                "Reminder notified for {Number} but MarkAsSent failed: {Error}",
+                                "Reminder delivered for {Number} but MarkAsSent failed: {Error}",
                                 item.Number,
                                 mark.Error);
                             continue;

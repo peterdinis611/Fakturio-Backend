@@ -48,4 +48,15 @@ public sealed class ExportsController(IExportService exports) : ApiControllerBas
         [FromQuery] DateOnly? to = null,
         CancellationToken ct = default)
         => (await exports.ExportAccountantPackAsync(from, to, ct)).ToFileResult(this);
+
+    /// <summary>CSV export of received (expense) documents.</summary>
+    [HttpGet("expenses.csv")]
+    [Produces("text/csv")]
+    [ProducesResponseType(typeof(FileContentResult), StatusCodes.Status200OK)]
+    public async Task<ActionResult> Expenses(
+        [FromQuery] DateOnly? from = null,
+        [FromQuery] DateOnly? to = null,
+        [FromQuery] InvoiceStatus? status = null,
+        CancellationToken ct = default)
+        => (await exports.ExportExpensesCsvAsync(from, to, status, ct)).ToFileResult(this);
 }

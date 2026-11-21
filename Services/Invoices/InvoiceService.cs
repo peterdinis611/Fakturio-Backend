@@ -271,6 +271,14 @@ public class InvoiceService(
                 "Only draft invoices can be fully updated.",
                 ErrorCodes.NotDraft);
 
+        if (request.ExpectedUpdatedAt is DateTime expected
+            && TruncateToUtcMilliseconds(invoice.UpdatedAt) != TruncateToUtcMilliseconds(expected))
+        {
+            return ServiceResult<InvoiceResponse>.Conflict(
+                "Invoice was modified by another request. Reload and try again.",
+                ErrorCodes.Conflict);
+        }
+
         if (ServiceGuards.ValidateGuid(request.CustomerId, "Customer", ErrorCodes.EmptyGuid) is { } guidError)
             return Fail<InvoiceResponse>(guidError);
 
@@ -981,6 +989,14 @@ public class InvoiceService(
         string.IsNullOrWhiteSpace(iban)
             ? null
             : iban.Replace(" ", "", StringComparison.Ordinal).ToUpperInvariant();
+
+    private static DateTime TruncateToUtcMilliseconds(DateTime value)
+    {
+        var utc = value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
+        return new DateTime(utc.Ticks - utc.Ticks % TimeSpan.TicksPerMillisecond, DateTimeKind.Utc);
+    }
 
     private static string StatusSk(InvoiceStatus status) => status switch
     {

@@ -92,15 +92,7 @@ try
     builder.Services.AddFakturioRateLimiting(builder.Configuration);
     builder.Services.AddSignalR();
 
-    var redisConnection =
-        builder.Configuration["Cache:RedisConnection"]
-        ?? builder.Configuration.GetConnectionString("Redis");
-    var healthChecks = builder.Services.AddHealthChecks();
-    if (!string.IsNullOrWhiteSpace(redisConnection)
-        && builder.Configuration.GetValue("Cache:UseRedis", true))
-    {
-        healthChecks.AddRedis(redisConnection, name: "redis");
-    }
+    // Unified probe: Controllers/HealthController at GET /api/health (DB + Redis + jobs).
 
     // SignalR negotiate uses credentials — AllowAnyOrigin is incompatible.
     var corsOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
@@ -175,7 +167,9 @@ try
     });
 
     app.MapControllers();
-    app.MapHealthChecks("/health").AllowAnonymous();
+    app.MapGet("/health", () => Results.Redirect("/api/health", permanent: false))
+        .AllowAnonymous()
+        .ExcludeFromDescription();
     app.MapHub<SignalHub>("/hubs/signal");
 
     app.Run();

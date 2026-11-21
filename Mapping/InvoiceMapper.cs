@@ -1,5 +1,6 @@
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Models;
+using Fakturio.Api.Services.Invoices;
 
 namespace Fakturio.Api.Mapping;
 
@@ -85,6 +86,7 @@ public static class InvoiceMapper
             DaysUntilDue(i, today.Value),
             i.CreatedAt,
             i.UpdatedAt,
+            InvoiceLegalTexts.IsReverseCharge(i),
             i.Items
                 .OrderBy(item => item.SortOrder)
                 .Select(item => new InvoiceItemResponse(

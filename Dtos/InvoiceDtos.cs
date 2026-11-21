@@ -42,7 +42,8 @@ public record UpdateInvoiceRequest(
     string? BankIban,
     string? BankBic,
     string? Notes,
-    IReadOnlyList<CreateInvoiceItemRequest> Items
+    IReadOnlyList<CreateInvoiceItemRequest> Items,
+    DateTime? ExpectedUpdatedAt = null
 );
 
 public record UpdateInvoiceStatusRequest(InvoiceStatus Status);
@@ -144,6 +145,7 @@ public record InvoiceResponse(
     int? DaysUntilDue,
     DateTime CreatedAt,
     DateTime UpdatedAt,
+    bool IsReverseCharge,
     IReadOnlyList<InvoiceItemResponse> Items
 );
 
