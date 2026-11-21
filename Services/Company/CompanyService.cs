@@ -194,7 +194,8 @@ public class CompanyService(
     private async Task SaveAndInvalidateAsync(CancellationToken ct)
     {
         await db.SaveChangesAsync(ct);
-        await cache.InvalidateCompanyAsync(ct);
-        await cache.InvalidateReportsAsync(ct);
+        var companyId = await tenant.GetCompanyIdAsync(ct);
+        await cache.InvalidateCompanyAsync(companyId, ct);
+        await cache.InvalidateReportsAsync(companyId, ct);
     }
 }

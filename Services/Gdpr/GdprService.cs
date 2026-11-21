@@ -282,7 +282,8 @@ public sealed class GdprService(
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
 
-        await cache.InvalidateAllAsync(ct);
+        await cache.InvalidateReportsAsync(companyId, ct);
+        await cache.InvalidateCompanyAsync(companyId, ct);
         await logos.DeleteIfLocalAsync(logoUrl, ct);
 
         return ServiceResult.Ok(StatusCodes.Status204NoContent);

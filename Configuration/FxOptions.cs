@@ -17,6 +17,9 @@ public sealed class FxOptions
     public string EcbDailyFxUrl { get; set; } =
         "https://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
 
+    /// <summary>open.er-api.com — last-resort public FX fill (no key, latest only).</summary>
+    public string ExchangeRateBaseUrl { get; set; } = "https://open.er-api.com/v6/";
+
     public int TimeoutSeconds { get; set; } = 10;
 
     public int CacheSeconds { get; set; } = 3600;

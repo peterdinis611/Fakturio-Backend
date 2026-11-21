@@ -238,7 +238,7 @@ public sealed class RecurringInvoiceService(
         template.NextRunOn = Advance(template.NextRunOn, template.DayOfMonth, template.Interval);
         template.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
-        await cache.InvalidateReportsAsync(ct);
+        await cache.InvalidateReportsAsync(companyId, ct);
 
         return ServiceResult<InvoiceResponse>.Created(
             InvoiceMapper.ToResponse(invoice));

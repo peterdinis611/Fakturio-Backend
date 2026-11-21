@@ -1,6 +1,7 @@
 using Fakturio.Api.Dtos;
 using Fakturio.Api.Extensions;
 using Fakturio.Api.Interfaces;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -252,6 +253,8 @@ public sealed class IntegrationsController(
     public ActionResult<AvatarLookupResponse> Avatar([FromQuery] string email)
         => avatars.FromEmail(email).ToActionResult(this);
 
+    /// <summary>k-anonymity HIBP check — anonymous so the register flow can call it.</summary>
+    [AllowAnonymous]
     [HttpPost("password-check")]
     [ProducesResponseType(typeof(PasswordCheckResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<PasswordCheckResponse>> PasswordCheck(

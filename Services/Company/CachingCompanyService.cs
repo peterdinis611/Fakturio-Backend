@@ -23,8 +23,8 @@ public sealed class CachingCompanyService(
         return await cache.GetOrCreateAsync(
             CacheKeys.CompanySettings(companyId),
             async cancel => await inner.GetAsync(cancel),
-            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
-            tags: [CacheTags.Company],
+            CompanyEntryOptions(),
+            tags: [CacheTags.Company(companyId)],
             cancellationToken: ct);
     }
 
@@ -37,8 +37,8 @@ public sealed class CachingCompanyService(
         return await cache.GetOrCreateAsync(
             CacheKeys.CompanySummary(companyId),
             async cancel => await inner.GetSummaryAsync(cancel),
-            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
-            tags: [CacheTags.Company],
+            CompanyEntryOptions(),
+            tags: [CacheTags.Company(companyId)],
             cancellationToken: ct);
     }
 
@@ -51,8 +51,8 @@ public sealed class CachingCompanyService(
         return await cache.GetOrCreateAsync(
             CacheKeys.CompanyStatus(companyId),
             async cancel => await inner.GetStatusAsync(cancel),
-            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
-            tags: [CacheTags.Company],
+            CompanyEntryOptions(),
+            tags: [CacheTags.Company(companyId)],
             cancellationToken: ct);
     }
 
@@ -65,8 +65,8 @@ public sealed class CachingCompanyService(
         return await cache.GetOrCreateAsync(
             CacheKeys.CompanyBank(companyId),
             async cancel => await inner.GetBankAsync(cancel),
-            new HybridCacheEntryOptions { Expiration = options.Value.CompanyTtl },
-            tags: [CacheTags.Company],
+            CompanyEntryOptions(),
+            tags: [CacheTags.Company(companyId)],
             cancellationToken: ct);
     }
 
@@ -103,4 +103,11 @@ public sealed class CachingCompanyService(
     public Task<ServiceResult<CompanySettingsResponse>> DeleteLogoAsync(
         CancellationToken ct = default)
         => inner.DeleteLogoAsync(ct);
+
+    private HybridCacheEntryOptions CompanyEntryOptions() =>
+        new()
+        {
+            Expiration = options.Value.CompanyTtl,
+            LocalCacheExpiration = options.Value.CompanyLocalTtl,
+        };
 }

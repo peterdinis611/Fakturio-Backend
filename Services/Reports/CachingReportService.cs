@@ -10,7 +10,7 @@ namespace Fakturio.Api.Services.Reports;
 
 /// <summary>
 /// Decorator that caches successful report reads via HybridCache.
-/// Validation failures are not cached.
+/// Validation failures are not cached. Tags are per-company.
 /// </summary>
 public sealed class CachingReportService(
     ReportService inner,
@@ -29,16 +29,17 @@ public sealed class CachingReportService(
         if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
             return Fail<ReportOverviewResponse>(rangeError);
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportOverview(await tenant.GetCompanyIdAsync(ct), from, to, asOf),
+            CacheKeys.ReportOverview(companyId, from, to, asOf),
             async cancel =>
             {
                 var result = await inner.GetOverviewAsync(from, to, cancel);
                 return result.Data!;
             },
-            new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
-            tags: [CacheTags.Reports],
+            ReportEntryOptions(),
+            tags: [CacheTags.Reports(companyId)],
             cancellationToken: ct);
 
         return ServiceResult<ReportOverviewResponse>.Ok(data);
@@ -55,15 +56,16 @@ public sealed class CachingReportService(
         if (ServiceGuards.ValidateYear(selectedYear) is { } yearError)
             return Fail<MonthlyRevenueResponse>(yearError);
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportMonthly(await tenant.GetCompanyIdAsync(ct), selectedYear),
+            CacheKeys.ReportMonthly(companyId, selectedYear),
             async cancel =>
             {
                 var result = await inner.GetMonthlyRevenueAsync(selectedYear, cancel);
                 return result.Data!;
             },
-            new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
-            tags: [CacheTags.Reports],
+            ReportEntryOptions(),
+            tags: [CacheTags.Reports(companyId)],
             cancellationToken: ct);
 
         return ServiceResult<MonthlyRevenueResponse>.Ok(data);
@@ -76,20 +78,17 @@ public sealed class CachingReportService(
         if (!options.Value.Enabled)
             return await inner.GetAgingAsync(largestLimit, ct);
 
-        var result = await inner.GetAgingAsync(largestLimit, ct);
-        if (!result.Success)
-            return result;
-
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportAging(await tenant.GetCompanyIdAsync(ct), asOf, largestLimit),
+            CacheKeys.ReportAging(companyId, asOf, largestLimit),
             async cancel =>
             {
                 var innerResult = await inner.GetAgingAsync(largestLimit, cancel);
                 return innerResult.Data!;
             },
-            new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
-            tags: [CacheTags.Reports],
+            ReportEntryOptions(),
+            tags: [CacheTags.Reports(companyId)],
             cancellationToken: ct);
 
         return ServiceResult<AgingReportResponse>.Ok(data);
@@ -107,15 +106,16 @@ public sealed class CachingReportService(
         if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
             return Fail<TopCustomersReportResponse>(rangeError);
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportTopCustomers(await tenant.GetCompanyIdAsync(ct), from, to, limit),
+            CacheKeys.ReportTopCustomers(companyId, from, to, limit),
             async cancel =>
             {
                 var result = await inner.GetTopCustomersAsync(from, to, limit, cancel);
                 return result.Data!;
             },
-            new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
-            tags: [CacheTags.Reports],
+            ReportEntryOptions(),
+            tags: [CacheTags.Reports(companyId)],
             cancellationToken: ct);
 
         return ServiceResult<TopCustomersReportResponse>.Ok(data);
@@ -132,19 +132,27 @@ public sealed class CachingReportService(
         if (ServiceGuards.ValidateDateRange(from, to) is { } rangeError)
             return Fail<VatReportResponse>(rangeError);
 
+        var companyId = await tenant.GetCompanyIdAsync(ct);
         var data = await cache.GetOrCreateAsync(
-            CacheKeys.ReportVat(await tenant.GetCompanyIdAsync(ct), from, to),
+            CacheKeys.ReportVat(companyId, from, to),
             async cancel =>
             {
                 var result = await inner.GetVatSummaryAsync(from, to, cancel);
                 return result.Data!;
             },
-            new HybridCacheEntryOptions { Expiration = options.Value.ReportsTtl },
-            tags: [CacheTags.Reports],
+            ReportEntryOptions(),
+            tags: [CacheTags.Reports(companyId)],
             cancellationToken: ct);
 
         return ServiceResult<VatReportResponse>.Ok(data);
     }
+
+    private HybridCacheEntryOptions ReportEntryOptions() =>
+        new()
+        {
+            Expiration = options.Value.ReportsTtl,
+            LocalCacheExpiration = options.Value.ReportsLocalTtl,
+        };
 
     private static ServiceResult<T> Fail<T>(ServiceResult error) =>
         ServiceResult<T>.Fail(error.Error!, error.StatusCode, error.ErrorCode);

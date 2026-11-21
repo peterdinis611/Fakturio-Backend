@@ -63,6 +63,27 @@ public sealed class RegistryOptions
     /// <summary>GLEIF LEI API — global legal entity identifiers (no key).</summary>
     public string GleifBaseUrl { get; set; } = "https://api.gleif.org/api/v1/";
 
+    /// <summary>VATcomply — TEDB VAT rates, IBAN hint, geolocate (no key).</summary>
+    public string VatComplyBaseUrl { get; set; } = "https://api.vatcomply.com/";
+
+    /// <summary>MF SR eInvoice public API (prod).</summary>
+    public string MfEinvoiceBaseUrl { get; set; } = "https://api.einvoice.mfsr.sk/";
+
+    /// <summary>MF SR eInvoice public API (dev/test fallback).</summary>
+    public string MfEinvoiceDevBaseUrl { get; set; } = "https://dev.api.einvoice.mfsr.sk/";
+
+    /// <summary>data.gov.sk national open data catalogue.</summary>
+    public string DataGovSkBaseUrl { get; set; } = "https://data.gov.sk/";
+
+    /// <summary>data.gov.cz national open data catalogue.</summary>
+    public string DataGovCzBaseUrl { get; set; } = "https://data.gov.cz/";
+
+    /// <summary>data.europa.eu portal (aggregates SK/CZ catalogues; search fallback).</summary>
+    public string DataEuropaBaseUrl { get; set; } = "https://data.europa.eu/";
+
+    /// <summary>Have I Been Pwned Pwned Passwords range API (k-anonymity, no key).</summary>
+    public string HibpBaseUrl { get; set; } = "https://api.pwnedpasswords.com/";
+
     /// <summary>Prefer ORSF over RPO for SK IČO lookup (falls back to RPO).</summary>
     public bool PreferOrsf { get; set; } = true;
 

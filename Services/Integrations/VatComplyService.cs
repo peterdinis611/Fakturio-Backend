@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Net;
+using System.Net.Sockets;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Fakturio.Api.Common;
@@ -48,10 +50,23 @@ public sealed class VatComplyService(
             await using var stream = await response.Content.ReadAsStreamAsync(ct);
             using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
             var root = doc.RootElement;
-            var ratesEl = root.TryGetProperty("rates", out var r) ? r : root;
+            var ratesEl = root.ValueKind == JsonValueKind.Object && root.TryGetProperty("rates", out var r)
+                ? r
+                : root;
 
             var countries = new List<EuVatRateCountryItem>();
-            if (ratesEl.ValueKind == JsonValueKind.Object)
+            // Live API returns an array: [{ country_code, standard_rate, reduced_rates: [..] }]
+            if (ratesEl.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in ratesEl.EnumerateArray())
+                {
+                    var code = GetString(el, "country_code") ?? GetString(el, "country");
+                    if (code is null) continue;
+                    var item = ParseCountry(code, el);
+                    if (item is not null) countries.Add(item);
+                }
+            }
+            else if (ratesEl.ValueKind == JsonValueKind.Object)
             {
                 foreach (var prop in ratesEl.EnumerateObject())
                 {
@@ -92,25 +107,59 @@ public sealed class VatComplyService(
         string? ip,
         CancellationToken ct = default)
     {
+        var requested = string.IsNullOrWhiteSpace(ip) ? null : ip.Trim();
+        if (requested is not null)
+        {
+            if (!IPAddress.TryParse(requested, out var parsed))
+            {
+                return ServiceResult<GeolocateResponse>.BadRequest(
+                    "ip is not a valid IP address.",
+                    ErrorCodes.BadRequest);
+            }
+
+            if (parsed.IsIPv4MappedToIPv6)
+                parsed = parsed.MapToIPv4();
+            requested = parsed.ToString();
+
+            if (IsNonPublic(parsed))
+            {
+                return ServiceResult<GeolocateResponse>.Ok(new(
+                    requested, null, null, "vatcomply-geolocate-private-ip"));
+            }
+        }
+
         try
         {
             var client = httpClientFactory.CreateClient("vatcomply");
-            var path = string.IsNullOrWhiteSpace(ip)
-                ? "geolocate"
-                : $"geolocate?ip={Uri.EscapeDataString(ip.Trim())}";
-            using var response = await client.GetAsync(path, ct);
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                requested is null ? "geolocate" : $"geolocate?ip={Uri.EscapeDataString(requested)}");
+            if (requested is not null)
+                request.Headers.TryAddWithoutValidation("X-Forwarded-For", requested);
+
+            using var response = await client.SendAsync(request, ct);
             if (!response.IsSuccessStatusCode)
             {
                 return ServiceResult<GeolocateResponse>.Ok(new(
-                    ip, null, null, "vatcomply-geolocate-soft-fail"));
+                    requested, null, null, "vatcomply-geolocate-soft-fail"));
             }
 
             var json = await response.Content.ReadFromJsonAsync<JsonElement>(JsonOptions, ct);
-            var countryCode = GetString(json, "country_code") ?? GetString(json, "countryCode");
-            var countryName = GetString(json, "country_name") ?? GetString(json, "country");
-            var resolvedIp = GetString(json, "ip") ?? ip;
+            var resolvedIp = GetString(json, "ip");
+
+            // VATcomply geolocates the *caller* IP and may ignore ?ip=. Never return another
+            // client's location as if it belonged to the requested address.
+            if (requested is not null && resolvedIp is not null
+                && !string.Equals(resolvedIp, requested, StringComparison.OrdinalIgnoreCase))
+            {
+                return ServiceResult<GeolocateResponse>.Ok(new(
+                    requested, null, null, "vatcomply-geolocate-ip-unsupported"));
+            }
+
+            var countryCode = GetString(json, "country_code") ?? GetString(json, "iso2");
+            var countryName = GetString(json, "name") ?? GetString(json, "country_name");
             return ServiceResult<GeolocateResponse>.Ok(new(
-                resolvedIp, countryCode, countryName, "vatcomply-geolocate"));
+                resolvedIp ?? requested, countryCode, countryName, "vatcomply-geolocate"));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -120,8 +169,22 @@ public sealed class VatComplyService(
         {
             logger.LogDebug(ex, "VATcomply geolocate failed");
             return ServiceResult<GeolocateResponse>.Ok(new(
-                ip, null, null, "vatcomply-geolocate-soft-fail"));
+                requested, null, null, "vatcomply-geolocate-soft-fail"));
         }
+    }
+
+    private static bool IsNonPublic(IPAddress ip)
+    {
+        if (IPAddress.IsLoopback(ip) || ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any))
+            return true;
+        if (ip.AddressFamily == AddressFamily.InterNetworkV6)
+            return ip.IsIPv6LinkLocal || ip.IsIPv6SiteLocal || ip.IsIPv6UniqueLocal;
+        var b = ip.GetAddressBytes();
+        return b[0] == 10
+               || (b[0] == 172 && b[1] is >= 16 and <= 31)
+               || (b[0] == 192 && b[1] == 168)
+               || (b[0] == 169 && b[1] == 254)
+               || (b[0] == 100 && b[1] is >= 64 and <= 127);
     }
 
     public async Task<(bool Ok, string? BankName, string? Bic, string? Country)> TryLookupIbanAsync(
@@ -168,7 +231,14 @@ public sealed class VatComplyService(
         else if (el.TryGetProperty("standard", out var std2) && TryDecimal(std2, out var s2))
             standard = s2;
 
-        if (el.TryGetProperty("reduced_rates", out var red) && red.ValueKind == JsonValueKind.Object)
+        if (el.TryGetProperty("reduced_rates", out var redRates) && redRates.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in redRates.EnumerateArray())
+            {
+                if (TryDecimal(item, out var rv)) reduced.Add(rv);
+            }
+        }
+        else if (el.TryGetProperty("reduced_rates", out var red) && red.ValueKind == JsonValueKind.Object)
         {
             foreach (var p in red.EnumerateObject())
             {

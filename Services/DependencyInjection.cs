@@ -218,48 +218,55 @@ public static class DependencyInjection
         });
         services.AddHttpClient("vatcomply", client =>
         {
-            client.BaseAddress = new Uri("https://api.vatcomply.com/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.VatComplyBaseUrl));
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
         services.AddHttpClient("mfeinvoice", client =>
         {
-            client.BaseAddress = new Uri("https://api.einvoice.mfsr.sk/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.MfEinvoiceBaseUrl));
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
         services.AddHttpClient("mfeinvoice-dev", client =>
         {
-            client.BaseAddress = new Uri("https://dev.api.einvoice.mfsr.sk/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.MfEinvoiceDevBaseUrl));
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
         services.AddHttpClient("datagovsk", client =>
         {
-            client.BaseAddress = new Uri("https://data.gov.sk/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.DataGovSkBaseUrl));
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
         services.AddHttpClient("datagovcz", client =>
         {
-            client.BaseAddress = new Uri("https://data.gov.cz/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.DataGovCzBaseUrl));
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("dataeuropa", client =>
+        {
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.DataEuropaBaseUrl));
             client.Timeout = timeout;
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
         services.AddHttpClient("hibp", client =>
         {
-            client.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(registry.HibpBaseUrl));
             client.Timeout = TimeSpan.FromSeconds(10);
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
         services.AddHttpClient("exchangerate", client =>
         {
-            client.BaseAddress = new Uri("https://open.er-api.com/v6/");
+            client.BaseAddress = new Uri(EnsureTrailingSlash(fx.ExchangeRateBaseUrl));
             client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });

@@ -136,6 +136,7 @@ public sealed class CompositeFxRateService(
         if (symbolList.Contains("CZK", StringComparer.Ordinal) && !rates.ContainsKey("CZK"))
             frankfurterSymbols.Add("CZK");
 
+        ServiceResult<FxRatesResponse>? frankfurterFailure = null;
         if (frankfurterSymbols.Count > 0 || rates.Count == 0)
         {
             var ff = onDate is { } d
@@ -144,8 +145,7 @@ public sealed class CompositeFxRateService(
 
             if (!ff.Success || ff.Data is null)
             {
-                if (rates.Count == 0)
-                    return ff;
+                frankfurterFailure = ff;
             }
             else
             {
@@ -160,7 +160,8 @@ public sealed class CompositeFxRateService(
         }
 
         var stillMissing = symbolList.Where(s => !rates.ContainsKey(s)).ToArray();
-        if (stillMissing.Length > 0 || rates.Count == 0)
+        // open.er-api only publishes the latest table — never use it for historical (dated) requests.
+        if (onDate is null && (stillMissing.Length > 0 || rates.Count == 0))
         {
             var er = await openErApi.GetLatestAsync(
                 baseCode,
@@ -184,6 +185,8 @@ public sealed class CompositeFxRateService(
 
         if (rates.Count == 0)
         {
+            if (frankfurterFailure is not null)
+                return frankfurterFailure;
             return ServiceResult<FxRatesResponse>.Fail(
                 "Exchange rates are temporarily unavailable.",
                 StatusCodes.Status502BadGateway,
