@@ -11,6 +11,8 @@ namespace Fakturio.Api.Services.Iban;
 
 public sealed class IbanLookupService(
     IHttpClientFactory httpClientFactory,
+    IBankDirectoryService banks,
+    IVatComplyService vatComply,
     ILogger<IbanLookupService> logger) : IIbanLookupService
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -19,95 +21,6 @@ public sealed class IbanLookupService(
     };
 
     private static readonly ConcurrentDictionary<string, IbanLookupResponse> Cache = new(StringComparer.Ordinal);
-
-    /// <summary>NBS bank codes → name (common SK codes).</summary>
-    private static readonly Dictionary<string, (string Name, string? Bic)> SkBanks = new(StringComparer.Ordinal)
-    {
-        ["0200"] = ("Slovenská sporiteľňa", "GIBASKBX"),
-        ["0720"] = ("Národná banka Slovenska", "NBSBSKBX"),
-        ["0900"] = ("Slovenská pošta / Poštová banka", "PBNKSKBA"),
-        ["1100"] = ("Tatra banka", "TATRSKBX"),
-        ["1111"] = ("UniCredit Bank CZ/SK", "UNCRSKBX"),
-        ["1200"] = ("VÚB banka", "SUBASKBX"),
-        ["3000"] = ("Slovenská záručná a rozvojová banka", "SLZBSKBA"),
-        ["3100"] = ("Prima banka Slovensko", "KOMASK2X"),
-        ["5200"] = ("OTP Banka Slovensko", "OTPVSKBX"),
-        ["5600"] = ("Prima banka Slovensko", "KOMASK2X"),
-        ["5900"] = ("Prima banka Slovensko", "KOMASK2X"),
-        ["6500"] = ("OTP Banka", "OTPVSKBX"),
-        ["7300"] = ("ING Bank", "INGBSKBX"),
-        ["7500"] = ("J&T BANKA", "JTBPSKBA"),
-        ["7930"] = ("Wüstenrot", "WUSTSKBA"),
-        ["8100"] = ("ČSOB", "CEKOSKBX"),
-        ["8120"] = ("UniCredit Bank", "UNCRSKBX"),
-        ["8130"] = ("Citibank Europe", "CITISKBA"),
-        ["8160"] = ("EXIMBANKA SR", "EXSKSKBX"),
-        ["8170"] = ("ČSOB", "CEKOSKBX"),
-        ["8180"] = ("Štátna pokladnica", "SPSRSKBA"),
-        ["8320"] = ("Fio banka", "FIOZSKBA"),
-        ["8330"] = ("Fio banka", "FIOZSKBA"),
-        ["8350"] = ("J&T BANKA", "JTBPSKBA"),
-        ["8360"] = ("mBank", "BREXSKBX"),
-        ["8370"] = ("Oberbank", "OBKLSKBA"),
-        ["8380"] = ("BKS Bank", "BFKKSKBB"),
-        ["8390"] = ("Privatbanka", "BSLOSK22"),
-        ["8410"] = ("Raiffeisen Bank", "TATRSKBX"),
-        ["8420"] = ("Prima banka", "KOMASK2X"),
-        ["8430"] = ("Komerční banka Bratislava", "KOMBSKBA"),
-        ["9950"] = ("First Data / Card", null),
-        ["9951"] = ("Diners Club", null),
-        ["9952"] = ("Home Credit", null),
-    };
-
-    /// <summary>Common CZ bank codes (ČNB).</summary>
-    private static readonly Dictionary<string, (string Name, string? Bic)> CzBanks = new(StringComparer.Ordinal)
-    {
-        ["0100"] = ("Komerční banka", "KOMBCZPP"),
-        ["0300"] = ("ČSOB", "CEKOCZPP"),
-        ["0600"] = ("MONETA Money Bank", "AGBACZPP"),
-        ["0710"] = ("Česká národní banka", "CNBACZPP"),
-        ["0800"] = ("Česká spořitelna", "GIBACZPX"),
-        ["2010"] = ("Fio banka", "FIOBCZPP"),
-        ["2060"] = ("Citfin", "CITFCZPP"),
-        ["2070"] = ("TRINITY BANK", "MPUBCZPP"),
-        ["2100"] = ("UniCredit Bank", "BACXCZPP"),
-        ["2200"] = ("Peněžní dům", null),
-        ["2220"] = ("Artesa", "ARTTCZPP"),
-        ["2240"] = ("Poštová banka", "POBNCZPP"),
-        ["2250"] = ("Banka CREDITAS", "CTASCZ22"),
-        ["2260"] = ("NEY spořitelní družstvo", null),
-        ["2310"] = ("ZUNO BANK", "ZUNOCZPP"),
-        ["2600"] = ("Citibank Europe", "CITICZPX"),
-        ["2700"] = ("UniCredit Bank", "BACXCZPP"),
-        ["3030"] = ("Air Bank", "AIRACZPP"),
-        ["3050"] = ("BNP Paribas Personal Finance", "BPPFCZP1"),
-        ["3060"] = ("PKO BP", null),
-        ["3500"] = ("ING Bank", "INGBCZPP"),
-        ["4000"] = ("Expobank CZ", "EXPNCZPP"),
-        ["4300"] = ("Českomoravská záruční a rozvojová banka", "CMZRCZP1"),
-        ["5500"] = ("Raiffeisenbank", "RZBCCZPP"),
-        ["5800"] = ("J&T BANKA", "JTBPCZPP"),
-        ["6000"] = ("PPF banka", "PMBPCZPP"),
-        ["6100"] = ("Equa bank", "EQBKCZPP"),
-        ["6200"] = ("COMMERZBANK Aktiengesellschaft", "COBACZPX"),
-        ["6210"] = ("mBank", "BREXCZPP"),
-        ["6300"] = ("BNP Paribas", "GEBACZPP"),
-        ["6700"] = ("Všeobecná úverová banka", null),
-        ["6800"] = ("Sberbank CZ", "VBOECZ2X"),
-        ["7910"] = ("Deutsche Bank", "DEUTCZPX"),
-        ["7940"] = ("Waldviertler Sparkasse Bank", null),
-        ["7950"] = ("Raiffeisen stavební spořitelna", null),
-        ["7960"] = ("Českomoravská stavební spořitelna", null),
-        ["7970"] = ("Wüstenrot hypoteční banka", null),
-        ["7980"] = ("Wüstenrot stavební spořitelna", null),
-        ["7990"] = ("Modrá pyramida stavební spořitelna", null),
-        ["8030"] = ("Volksbank Raiffeisenbank Nordoberpfalz", null),
-        ["8040"] = ("Oberbank AG", "OBKLCZ2X"),
-        ["8060"] = ("Stavební spořitelna České spořitelny", null),
-        ["8090"] = ("Česká exportní banka", "CZEECZPP"),
-        ["8150"] = ("HSBC Bank", "MIDLCZPP"),
-        ["8200"] = ("PRIVAT BANK", "PRIBCZPP"),
-    };
 
     public async Task<ServiceResult<IbanLookupResponse>> LookupAsync(
         string iban,
@@ -137,15 +50,11 @@ public sealed class IbanLookupService(
         if (normalized.Length >= 8)
         {
             bankCode = normalized.Substring(4, 4);
-            if (country == "SK" && SkBanks.TryGetValue(bankCode, out var sk))
+            if (banks.TryResolve(country, bankCode, out var name, out var localBic))
             {
-                bankName = sk.Name;
-                bic = sk.Bic;
-            }
-            else if (country == "CZ" && CzBanks.TryGetValue(bankCode, out var cz))
-            {
-                bankName = cz.Name;
-                bic = cz.Bic;
+                bankName = name;
+                bic = localBic;
+                source = country is "CZ" ? "cnb-local" : "nbs-local";
             }
         }
 
@@ -163,7 +72,9 @@ public sealed class IbanLookupService(
                     if (!string.IsNullOrWhiteSpace(payload.BankData?.Name))
                     {
                         bankName = payload.BankData.Name.Trim();
-                        source = "openiban";
+                        source = source.StartsWith("nbs", StringComparison.Ordinal) || source.StartsWith("cnb", StringComparison.Ordinal)
+                            ? $"{source}+openiban"
+                            : "openiban";
                     }
 
                     if (!string.IsNullOrWhiteSpace(payload.BankData?.Bic))
@@ -174,11 +85,6 @@ public sealed class IbanLookupService(
 
                     if (!string.IsNullOrWhiteSpace(payload.BankData?.City))
                         city = payload.BankData.City.Trim();
-
-                    if (source == "local" && !string.IsNullOrWhiteSpace(bankName))
-                        source = "local+openiban";
-                    else if (source == "local" && payload.Valid)
-                        source = string.IsNullOrWhiteSpace(bankName) ? "local" : source;
                 }
             }
         }
@@ -189,6 +95,17 @@ public sealed class IbanLookupService(
         catch (Exception ex)
         {
             logger.LogDebug(ex, "openiban enrichment failed for {Iban}", normalized);
+        }
+
+        if (string.IsNullOrWhiteSpace(bankName) || string.IsNullOrWhiteSpace(bic))
+        {
+            var (ok, vcName, vcBic, _) = await vatComply.TryLookupIbanAsync(normalized, ct);
+            if (ok)
+            {
+                bankName ??= vcName;
+                bic ??= vcBic;
+                source = string.IsNullOrWhiteSpace(bankName) ? source : $"{source}+vatcomply".Trim('+');
+            }
         }
 
         var result = new IbanLookupResponse(

@@ -6,10 +6,13 @@ using Fakturio.Api.Services.Common;
 namespace Fakturio.Api.Services.Calendar;
 
 /// <summary>
-/// SK/CZ public holidays + weekends → next / add business days (local, no remote API).
+/// SK/CZ/AT/HU/PL public holidays + weekends → next / add business days (local, no remote API).
 /// </summary>
 public sealed class BusinessDayService : IBusinessDayService
 {
+    private static readonly HashSet<string> Supported =
+        new(StringComparer.Ordinal) { "SK", "CZ", "AT", "HU", "PL" };
+
     public ServiceResult<BusinessDayResponse> AddBusinessDays(
         DateOnly from,
         int addDays,
@@ -19,10 +22,10 @@ public sealed class BusinessDayService : IBusinessDayService
             ? "SK"
             : country.Trim().ToUpperInvariant();
 
-        if (cc is not ("SK" or "CZ"))
+        if (!Supported.Contains(cc))
         {
             return ServiceResult<BusinessDayResponse>.BadRequest(
-                "Business-day calendar supports SK and CZ only.",
+                "Business-day calendar supports SK, CZ, AT, HU, and PL.",
                 ErrorCodes.UnsupportedCountry);
         }
 
@@ -117,40 +120,68 @@ public sealed class BusinessDayService : IBusinessDayService
 
     private static IEnumerable<(int Month, int Day, string Name)> FixedHolidays(string country)
     {
-        // Shared / overlapping
         yield return (1, 1, "new-year");
         yield return (5, 1, "labour-day");
-        yield return (5, 8, "liberation-day");
-        yield return (12, 24, "christmas-eve");
         yield return (12, 25, "christmas");
         yield return (12, 26, "stephen");
 
-        if (country == "SK")
+        switch (country)
         {
-            yield return (1, 6, "epiphany");
-            yield return (7, 5, "cyril-methodius");
-            yield return (8, 29, "slovak-national-uprising");
-            yield return (9, 1, "constitution-day");
-            yield return (9, 15, "our-lady-of-sorrows");
-            yield return (11, 1, "all-saints");
-            yield return (11, 17, "struggle-for-freedom");
-        }
-        else // CZ
-        {
-            yield return (7, 5, "cyril-methodius");
-            yield return (7, 6, "jan-hus");
-            yield return (9, 28, "czech-statehood");
-            yield return (10, 28, "independent-czechoslovak-state");
-            yield return (11, 17, "struggle-for-freedom");
+            case "SK":
+                yield return (1, 6, "epiphany");
+                yield return (5, 8, "liberation-day");
+                yield return (7, 5, "cyril-methodius");
+                yield return (8, 29, "slovak-national-uprising");
+                yield return (9, 1, "constitution-day");
+                yield return (9, 15, "our-lady-of-sorrows");
+                yield return (11, 1, "all-saints");
+                yield return (11, 17, "struggle-for-freedom");
+                yield return (12, 24, "christmas-eve");
+                break;
+            case "CZ":
+                yield return (5, 8, "liberation-day");
+                yield return (7, 5, "cyril-methodius");
+                yield return (7, 6, "jan-hus");
+                yield return (9, 28, "czech-statehood");
+                yield return (10, 28, "independent-czechoslovak-state");
+                yield return (11, 17, "struggle-for-freedom");
+                yield return (12, 24, "christmas-eve");
+                break;
+            case "AT":
+                yield return (1, 6, "epiphany");
+                yield return (5, 1, "labour-day");
+                yield return (8, 15, "assumption");
+                yield return (10, 26, "national-day");
+                yield return (11, 1, "all-saints");
+                yield return (12, 8, "immaculate-conception");
+                break;
+            case "HU":
+                yield return (3, 15, "national-day");
+                yield return (8, 20, "st-stephen");
+                yield return (10, 23, "republic-day");
+                yield return (11, 1, "all-saints");
+                break;
+            case "PL":
+                yield return (1, 6, "epiphany");
+                yield return (5, 3, "constitution-day");
+                yield return (8, 15, "assumption");
+                yield return (11, 1, "all-saints");
+                yield return (11, 11, "independence-day");
+                break;
         }
     }
 
     private static IEnumerable<(int Offset, string Name)> MovableHolidays(string country)
     {
-        // Good Friday is a public holiday in SK (and banking holiday useful for due dates in CZ too).
         yield return (-2, "good-friday");
         yield return (1, "easter-monday");
-        _ = country;
+        if (country is "AT" or "HU" or "PL")
+            yield return (60, "corpus-christi"); // Thursday after Trinity
+        if (country == "AT")
+        {
+            yield return (39, "ascension");
+            yield return (50, "whit-monday");
+        }
     }
 
     /// <summary>Anonymous Gregorian algorithm.</summary>

@@ -34,6 +34,7 @@ using Fakturio.Api.Services.Security;
 using Fakturio.Api.Services.Compliance;
 using Fakturio.Api.Services.Email;
 using Fakturio.Api.Services.Integrations;
+using Fakturio.Api.Services.Banks;
 
 namespace Fakturio.Api.Services;
 
@@ -215,6 +216,53 @@ public static class DependencyInjection
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
         });
+        services.AddHttpClient("vatcomply", client =>
+        {
+            client.BaseAddress = new Uri("https://api.vatcomply.com/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("mfeinvoice", client =>
+        {
+            client.BaseAddress = new Uri("https://api.einvoice.mfsr.sk/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("mfeinvoice-dev", client =>
+        {
+            client.BaseAddress = new Uri("https://dev.api.einvoice.mfsr.sk/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("datagovsk", client =>
+        {
+            client.BaseAddress = new Uri("https://data.gov.sk/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("datagovcz", client =>
+        {
+            client.BaseAddress = new Uri("https://data.gov.cz/");
+            client.Timeout = timeout;
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("hibp", client =>
+        {
+            client.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
+            client.Timeout = TimeSpan.FromSeconds(10);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("Fakturio/1.0");
+        });
+        services.AddHttpClient("exchangerate", client =>
+        {
+            client.BaseAddress = new Uri("https://open.er-api.com/v6/");
+            client.Timeout = TimeSpan.FromSeconds(Math.Clamp(fx.TimeoutSeconds, 5, 30));
+            client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        });
         services.AddHttpClient("ecb", client =>
         {
             var fxConfig = configuration.GetSection(FxOptions.SectionName).Get<FxOptions>() ?? new FxOptions();
@@ -286,7 +334,14 @@ public static class DependencyInjection
         services.AddScoped<IRpvsService, RpvsService>();
         services.AddScoped<IRegistrSmluvService, RegistrSmluvService>();
         services.AddScoped<ILeiLookupService, LeiLookupService>();
+        services.AddSingleton<IBankDirectoryService, BankDirectoryService>();
         services.AddScoped<IIbanLookupService, IbanLookupService>();
+        services.AddScoped<IVatComplyService, VatComplyService>();
+        services.AddScoped<IMfEinvoiceService, MfEinvoiceService>();
+        services.AddScoped<ICzJusticePdfService, CzJusticePdfService>();
+        services.AddScoped<IOpenDataSearchService, OpenDataSearchService>();
+        services.AddSingleton<IAvatarLookupService, AvatarLookupService>();
+        services.AddScoped<IHibpPasswordService, HibpPasswordService>();
         services.AddSingleton<NominatimAddressService>();
         services.AddSingleton<RuianAddressService>();
         services.AddSingleton<SkAddressService>();
@@ -300,6 +355,7 @@ public static class DependencyInjection
         services.AddSingleton<CnbFxRateService>();
         services.AddSingleton<NbsFxRateService>();
         services.AddSingleton<EcbFxRateService>();
+        services.AddSingleton<OpenErApiFxRateService>();
         services.AddSingleton<IFxRateService, CompositeFxRateService>();
         services.AddScoped<ISanctionsLookupService, OpenSanctionsService>();
         services.AddScoped<ISkObchodnyVestnikService, SkObchodnyVestnikService>();

@@ -29,7 +29,15 @@ public sealed class IntegrationsController(
     ISkObchodnyVestnikService obchodnyVestnik,
     IRestCountriesService countries,
     IEmailTypoHintService emailHints,
-    IPeppolDirectoryService peppol) : ApiControllerBase
+    IPeppolDirectoryService peppol,
+    IBankDirectoryService banks,
+    IVatComplyService vatComply,
+    IMfEinvoiceService mfEinvoice,
+    ICzJusticePdfService czJustice,
+    IOpenDataSearchService openData,
+    IAvatarLookupService avatars,
+    IHibpPasswordService hibp,
+    IHttpContextAccessor httpContext) : ApiControllerBase
 {
     [HttpGet("iban")]
     [ProducesResponseType(typeof(IbanLookupResponse), StatusCodes.Status200OK)]
@@ -186,4 +194,68 @@ public sealed class IntegrationsController(
         [FromQuery] string ico,
         CancellationToken ct = default)
         => (await peppol.LookupByIcoAsync(ico, ct)).ToActionResult(this);
+
+    [HttpGet("bank-code")]
+    [ProducesResponseType(typeof(BankCodeLookupResponse), StatusCodes.Status200OK)]
+    public ActionResult<BankCodeLookupResponse> BankCode(
+        [FromQuery] string code,
+        [FromQuery] string? country = "SK")
+        => banks.Lookup(code, country).ToActionResult(this);
+
+    [HttpGet("bank-codes")]
+    [ProducesResponseType(typeof(BankCodeListResponse), StatusCodes.Status200OK)]
+    public ActionResult<BankCodeListResponse> BankCodes([FromQuery] string? country = "SK")
+        => banks.List(country).ToActionResult(this);
+
+    [HttpGet("vat-rates")]
+    [ProducesResponseType(typeof(EuVatRatesResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<EuVatRatesResponse>> VatRates(
+        [FromQuery] string? country = null,
+        CancellationToken ct = default)
+        => (await vatComply.GetVatRatesAsync(country, ct)).ToActionResult(this);
+
+    [HttpGet("geolocate")]
+    [ProducesResponseType(typeof(GeolocateResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<GeolocateResponse>> Geolocate(
+        [FromQuery] string? ip = null,
+        CancellationToken ct = default)
+    {
+        var resolved = ip
+            ?? httpContext.HttpContext?.Connection.RemoteIpAddress?.ToString();
+        return (await vatComply.GeolocateAsync(resolved, ct)).ToActionResult(this);
+    }
+
+    [HttpGet("einvoice")]
+    [ProducesResponseType(typeof(MfEinvoiceLookupResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MfEinvoiceLookupResponse>> Einvoice(
+        [FromQuery] string ico,
+        CancellationToken ct = default)
+        => (await mfEinvoice.SearchByIcoAsync(ico, ct)).ToActionResult(this);
+
+    [HttpGet("cz-justice-pdf")]
+    [ProducesResponseType(typeof(CzJusticePdfResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<CzJusticePdfResponse>> CzJusticePdf(
+        [FromQuery] string ico,
+        CancellationToken ct = default)
+        => (await czJustice.LookupByIcoAsync(ico, ct)).ToActionResult(this);
+
+    [HttpGet("open-data")]
+    [ProducesResponseType(typeof(OpenDataSearchResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<OpenDataSearchResponse>> OpenData(
+        [FromQuery] string q,
+        [FromQuery] string? country = "SK",
+        CancellationToken ct = default)
+        => (await openData.SearchAsync(q, country, ct)).ToActionResult(this);
+
+    [HttpGet("avatar")]
+    [ProducesResponseType(typeof(AvatarLookupResponse), StatusCodes.Status200OK)]
+    public ActionResult<AvatarLookupResponse> Avatar([FromQuery] string email)
+        => avatars.FromEmail(email).ToActionResult(this);
+
+    [HttpPost("password-check")]
+    [ProducesResponseType(typeof(PasswordCheckResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PasswordCheckResponse>> PasswordCheck(
+        [FromBody] PasswordCheckRequest request,
+        CancellationToken ct = default)
+        => (await hibp.CheckAsync(request.Password, ct)).ToActionResult(this);
 }

@@ -14,6 +14,7 @@ public sealed class CompositeFxRateService(
     CnbFxRateService cnb,
     NbsFxRateService nbs,
     EcbFxRateService ecb,
+    OpenErApiFxRateService openErApi,
     ILogger<CompositeFxRateService> logger) : IFxRateService
 {
     public Task<ServiceResult<FxRatesResponse>> GetLatestAsync(
@@ -155,6 +156,29 @@ public sealed class CompositeFxRateService(
                     if (!rates.ContainsKey(k))
                         rates[k] = v;
                 }
+            }
+        }
+
+        var stillMissing = symbolList.Where(s => !rates.ContainsKey(s)).ToArray();
+        if (stillMissing.Length > 0 || rates.Count == 0)
+        {
+            var er = await openErApi.GetLatestAsync(
+                baseCode,
+                stillMissing.Length > 0 ? stillMissing : symbolList,
+                ct);
+            if (er.Success && er.Data is { } erData)
+            {
+                effectiveDate ??= erData.Date;
+                sources.Add("open-er-api");
+                foreach (var (k, v) in erData.Rates)
+                {
+                    if (!rates.ContainsKey(k))
+                        rates[k] = v;
+                }
+            }
+            else
+            {
+                logger.LogDebug("open.er-api unavailable as final FX fallback");
             }
         }
 

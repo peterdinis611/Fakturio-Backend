@@ -14,8 +14,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Data\bank-codes-sk.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Data\bank-codes-cz.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Data\bank-codes-sk.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="Data\bank-codes-cz.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
