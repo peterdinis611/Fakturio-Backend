@@ -280,3 +280,97 @@ public record PeppolLookupResponse(
     IReadOnlyList<PeppolParticipantItem> Participants,
     string Source
 );
+
+public record BankCodeLookupResponse(
+    string Code,
+    string Country,
+    string? Name,
+    string? Bic,
+    bool Found,
+    string Source
+);
+
+public record BankCodeListItem(string Code, string Name, string? Bic);
+
+public record BankCodeListResponse(
+    string Country,
+    IReadOnlyList<BankCodeListItem> Items,
+    string Source
+);
+
+public record EuVatRatesResponse(
+    string? Country,
+    decimal? Standard,
+    IReadOnlyList<decimal> Reduced,
+    IReadOnlyList<EuVatRateCountryItem> Countries,
+    string Source
+);
+
+public record EuVatRateCountryItem(
+    string Country,
+    decimal Standard,
+    IReadOnlyList<decimal> Reduced
+);
+
+public record GeolocateResponse(
+    string? Ip,
+    string? CountryCode,
+    string? CountryName,
+    string Source
+);
+
+public record MfEinvoiceItem(
+    string? Id,
+    string? Format,
+    string? CustomerName,
+    string? SupplierName,
+    string? CustomerIco,
+    string? SupplierIco,
+    string? IssuedAt
+);
+
+public record MfEinvoiceLookupResponse(
+    string Ico,
+    bool Found,
+    IReadOnlyList<MfEinvoiceItem> Invoices,
+    string Source
+);
+
+public record CzJusticeLinkItem(string Title, string Url);
+
+public record CzJusticePdfResponse(
+    string Ico,
+    bool Found,
+    IReadOnlyList<CzJusticeLinkItem> Links,
+    string Source
+);
+
+public record OpenDataDatasetItem(
+    string? Title,
+    string? Url,
+    string? Organization,
+    string? Notes
+);
+
+public record OpenDataSearchResponse(
+    string Query,
+    string Country,
+    bool Found,
+    IReadOnlyList<OpenDataDatasetItem> Datasets,
+    string Source
+);
+
+public record AvatarLookupResponse(
+    string EmailHash,
+    string GravatarUrl,
+    string LibravatarUrl,
+    string Source
+);
+
+public record PasswordCheckRequest(string Password);
+
+public record PasswordCheckResponse(
+    bool Pwned,
+    int Count,
+    string Source
+);
